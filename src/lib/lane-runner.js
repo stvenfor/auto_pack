@@ -12,6 +12,13 @@ const {
   syncAndroidLocalProperties,
 } = require("./build-env");
 const { readAppRoot } = require("./env");
+const { targetUploadResultPath } = require("./upload-result");
+
+const UPLOAD_RESULT_LANES = new Set([
+  "upload_pgyer",
+  "distribute",
+  "distribute_debug",
+]);
 
 /**
  * Spawn a Fastlane lane under packRoot with PACK_PLATFORM / PACK_MODE.
@@ -23,6 +30,7 @@ function startLane({
   platform = "android",
   mode = "debug",
   updateDescription = "",
+  skipPubGet = false,
   onStdout,
   onStderr,
   onClose,
@@ -42,10 +50,23 @@ function startLane({
   const env = sanitizeBuildEnv(process.env, { appRoot, flutterRoot });
   env.PACK_PLATFORM = packPlatform;
   env.PACK_MODE = packMode;
+  if (skipPubGet) {
+    env.PACK_SKIP_PUB_GET = "1";
+  }
 
   const note = String(updateDescription || "").trim();
   if (note) {
     env.PGYER_UPDATE_DESCRIPTION = note;
+  }
+
+  // Console owns last-upload.json aggregation; Fastlane writes per-Target files only.
+  if (UPLOAD_RESULT_LANES.has(lane)) {
+    env.PACK_UPLOAD_RESULT_PATH = targetUploadResultPath(
+      packRoot,
+      packPlatform,
+      packMode
+    );
+    env.PACK_SKIP_SHARED_UPLOAD_RESULT = "1";
   }
 
   // Align Gradle's flutter.sdk before Android builds so release AOT uses the

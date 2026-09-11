@@ -11,6 +11,8 @@ const {
   modeLabel,
   writeLastUpload,
   readLastUpload,
+  readTargetUploadResult,
+  targetUploadResultPath,
   buildQrHtml,
 } = require("../src/lib/upload-result");
 
@@ -21,6 +23,29 @@ describe("upload-result", () => {
     assert.equal(platformLabel("harmony"), "Harmony");
     assert.equal(modeLabel("debug"), "debug");
     assert.equal(modeLabel("profile"), "profile");
+  });
+
+  it("uses per-target upload result paths", () => {
+    const root = "/tmp/pack";
+    assert.equal(
+      targetUploadResultPath(root, "android", "debug"),
+      path.join(root, "artifacts", "last-upload-android-debug.json")
+    );
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pack-target-"));
+    const file = targetUploadResultPath(tmp, "ios", "release");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(
+      file,
+      JSON.stringify({
+        platform: "ios",
+        mode: "release",
+        installUrl: "https://www.pgyer.com/x",
+      })
+    );
+    const saved = readTargetUploadResult(tmp, "ios", "release");
+    assert.equal(saved.platform, "ios");
+    assert.equal(saved.installUrl, "https://www.pgyer.com/x");
+    fs.rmSync(tmp, { recursive: true, force: true });
   });
 
   it("writes json and html with platform/mode markers", () => {

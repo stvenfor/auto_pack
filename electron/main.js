@@ -289,7 +289,6 @@ ipcMain.handle("run:start", (_event, payload) => {
     });
     if (
       !result.cancelled &&
-      result.code === 0 &&
       UPLOAD_LANES.has(lane) &&
       result.uploads &&
       result.uploads.length

@@ -17,6 +17,13 @@ function lastUploadQrHtmlPath(packRoot) {
   return path.join(packRoot, "artifacts", "last-upload-qr.html");
 }
 
+/** Per-Target upload result written by Fastlane (safe under parallel uploads). */
+function targetUploadResultPath(packRoot, platform, mode) {
+  const p = String(platform || "android").toLowerCase();
+  const m = String(mode || "debug").toLowerCase();
+  return path.join(packRoot, "artifacts", `last-upload-${p}-${m}.json`);
+}
+
 function platformLabel(platform) {
   const key = String(platform || "").toLowerCase();
   return PLATFORM_LABEL[key] || String(platform || "未知平台");
@@ -30,6 +37,18 @@ function modeLabel(mode) {
 
 function readLastUpload(packRoot) {
   const file = lastUploadPath(packRoot);
+  if (!fs.existsSync(file)) return null;
+  try {
+    const data = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!data || typeof data !== "object") return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function readTargetUploadResult(packRoot, platform, mode) {
+  const file = targetUploadResultPath(packRoot, platform, mode);
   if (!fs.existsSync(file)) return null;
   try {
     const data = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -390,9 +409,11 @@ module.exports = {
   PLATFORM_LABEL,
   lastUploadPath,
   lastUploadQrHtmlPath,
+  targetUploadResultPath,
   platformLabel,
   modeLabel,
   readLastUpload,
+  readTargetUploadResult,
   readMergedInstallUrl,
   buildQrHtml,
   writeLastUpload,

@@ -270,9 +270,25 @@ def write_upload_result!(platform, mode, result)
     "updatedAt" => Time.now.utc.iso8601
   )
   FileUtils.mkdir_p(ARTIFACTS_DIR)
-  json_path = File.join(ARTIFACTS_DIR, "last-upload.json")
-  File.write(json_path, JSON.pretty_generate(payload) + "\n")
-  UI.success("Upload result: #{json_path}")
+
+  override = ENV["PACK_UPLOAD_RESULT_PATH"].to_s.strip
+  per_target =
+    if override.empty?
+      File.join(ARTIFACTS_DIR, "last-upload-#{platform}-#{mode}.json")
+    else
+      override
+    end
+  File.write(per_target, JSON.pretty_generate(payload) + "\n")
+  UI.success("Upload result (target): #{per_target}")
+
+  # Console parallel uploads set PACK_SKIP_SHARED_UPLOAD_RESULT=1 and aggregate
+  # last-upload.json in Node after all Targets finish.
+  unless ENV["PACK_SKIP_SHARED_UPLOAD_RESULT"].to_s.strip == "1"
+    shared = File.join(ARTIFACTS_DIR, "last-upload.json")
+    File.write(shared, JSON.pretty_generate(payload) + "\n")
+    UI.success("Upload result: #{shared}")
+  end
+
   UI.message("Platform: #{platform} | Mode: #{mode}")
   UI.message("Install note: #{note}") unless note.empty?
 end
@@ -307,12 +323,34 @@ platform :android do
       sync_android_local_properties!(app_root, flutter_root)
     end
 
+    skip_pub = ENV["PACK_SKIP_PUB_GET"].to_s.strip == "1"
     Dir.chdir(app_root) do
-      sh_flutter!(flutter, "pub", "get")
+      unless skip_pub
+        sh_flutter!(flutter, "pub", "get")
+      else
+        UI.message("PACK_SKIP_PUB_GET=1 — skip flutter pub get (shared prep already ran)")
+      end
       flutter_build!(flutter, platform, mode)
     end
 
     copy_build_artifact!(app_root, platform, mode)
+  end
+
+  desc "Shared dependency prep: flutter pub get once before parallel builds"
+  lane :prep_deps do
+    app_root = resolve_app_root
+    UI.user_error!("App Root does not exist: #{app_root}") unless Dir.exist?(app_root)
+
+    flutter = resolve_flutter_bin(app_root)
+    pin_flutter_env!(flutter)
+    UI.message("App Root: #{app_root}")
+    UI.message("Flutter:  #{flutter}")
+    UI.message("Shared prep: flutter pub get")
+
+    Dir.chdir(app_root) do
+      sh_flutter!(flutter, "pub", "get")
+    end
+    UI.success("prep_deps done")
   end
 
   desc "Upload the selected platform×mode artifact to Pgyer"
