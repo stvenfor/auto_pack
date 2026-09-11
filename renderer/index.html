@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' data: https: http:; connect-src 'self'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auto Pack</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="mast">
+        <div class="mast-brand">
+          <h1 class="brand">Auto Pack</h1>
+          <p class="tagline">按分支打包，送到蒲公英</p>
+        </div>
+        <div class="mast-actions">
+          <p class="artifact-stamp" id="target-hint"></p>
+          <button type="button" id="refresh" class="ghost">重新检查</button>
+        </div>
+      </header>
+
+      <div class="stage">
+        <aside class="rail" id="readiness-panel" aria-label="就绪状态">
+          <div class="rail-head">
+            <h2 class="rail-title">就绪</h2>
+            <span class="rail-mark" aria-hidden="true"></span>
+          </div>
+
+          <label class="field">
+            <span class="field-label">分支</span>
+            <select id="branch-select" disabled>
+              <option value="">—</option>
+            </select>
+          </label>
+          <p class="hint" id="branch-hint"></p>
+
+          <dl class="paths">
+            <div>
+              <dt>App Root</dt>
+              <dd id="app-root">—</dd>
+            </div>
+            <div>
+              <dt>Pack Root</dt>
+              <dd id="pack-root">—</dd>
+            </div>
+            <div>
+              <dt>Flutter</dt>
+              <dd id="flutter-bin">—</dd>
+            </div>
+          </dl>
+
+          <ul class="checks" id="checks"></ul>
+
+          <div class="rail-foot">
+            <button type="button" id="pick-app-root">选择 App Root…</button>
+            <p class="hint" id="key-hint">蒲公英 Key：—</p>
+          </div>
+        </aside>
+
+        <main class="work">
+          <section class="control-strip" aria-label="打包目标与操作">
+            <div class="target-list" id="target-list" role="group" aria-label="平台与模式">
+              <label class="target-row-pick">
+                <input type="checkbox" data-platform="android" checked />
+                <span class="target-platform">Android</span>
+                <select data-mode-for="android" aria-label="Android 模式">
+                  <option value="debug">debug</option>
+                  <option value="release">release</option>
+                </select>
+              </label>
+              <label class="target-row-pick">
+                <input type="checkbox" data-platform="ios" />
+                <span class="target-platform">iOS</span>
+                <select data-mode-for="ios" aria-label="iOS 模式">
+                  <option value="debug">debug</option>
+                  <option value="release">release</option>
+                </select>
+              </label>
+              <label class="target-row-pick">
+                <input type="checkbox" data-platform="harmony" />
+                <span class="target-platform">Harmony</span>
+                <select data-mode-for="harmony" aria-label="Harmony 模式">
+                  <option value="debug">debug</option>
+                  <option value="release">release (.app)</option>
+                  <option value="profile">profile (hap)</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="field field-note">
+              <span class="field-label"
+                >安装说明 <span class="optional">可选 · 蒲公英更新说明</span></span
+              >
+              <textarea
+                id="update-description"
+                rows="2"
+                maxlength="500"
+                placeholder="本次构建/上传的更新说明，留空则用默认文案"
+              ></textarea>
+            </label>
+
+            <div class="lanes" role="group">
+              <button type="button" data-lane="build" id="btn-build">
+                <span class="lane-name">构建</span>
+                <span class="lane-id">build</span>
+              </button>
+              <button type="button" data-lane="upload_pgyer" id="btn-upload">
+                <span class="lane-name">上传</span>
+                <span class="lane-id">upload_pgyer</span>
+              </button>
+              <button
+                type="button"
+                class="primary"
+                data-lane="distribute"
+                id="btn-distribute"
+              >
+                <span class="lane-name">构建并上传</span>
+                <span class="lane-id">distribute</span>
+              </button>
+            </div>
+            <p class="hint action-hint" id="action-hint"></p>
+          </section>
+
+          <section class="runs-panel" aria-label="运行日志">
+            <div class="runs-head">
+              <div class="run-tabs" id="run-tabs"></div>
+              <button type="button" id="cancel-run" class="danger" disabled>
+                取消当前 Run
+              </button>
+            </div>
+            <div class="log-bay">
+              <div class="log-bay-edge" aria-hidden="true"></div>
+              <pre class="log" id="log" aria-live="polite"></pre>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

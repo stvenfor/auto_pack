@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Build then upload for any supported platform×mode, then open QR.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=./_pack_args.sh
+source "$ROOT/bin/_pack_args.sh"
+
+if ! parse_pack_args "$@"; then
+  status=$?
+  echo "Usage: bin/distribute [--platform android|ios|harmony] [--mode debug|release|profile]"
+  usage_pack_args
+  exit "$status"
+fi
+
+cd "$ROOT"
+fastlane android distribute
+exec "$ROOT/bin/open-qr"

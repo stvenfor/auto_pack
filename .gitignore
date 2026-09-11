@@ -1,0 +1,16 @@
+.env
+.env.local
+vendor/
+.bundle/
+node_modules/
+artifacts/*
+!artifacts/.gitkeep
+tmp/
+*.apk
+*.ipa
+*.hap
+*.app
+.DS_Store
+fastlane/report.xml
+fastlane/README.md
+fastlane/test_output/

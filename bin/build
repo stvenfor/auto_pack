@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Build one platform×mode package via Fastlane.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=./_pack_args.sh
+source "$ROOT/bin/_pack_args.sh"
+
+if ! parse_pack_args "$@"; then
+  status=$?
+  echo "Usage: bin/build [--platform android|ios|harmony] [--mode debug|release]"
+  usage_pack_args
+  exit "$status"
+fi
+
+cd "$ROOT"
+exec fastlane android build

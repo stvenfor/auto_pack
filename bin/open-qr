@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# After a successful upload, open the labeled QR page.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+JSON="$ROOT/artifacts/last-upload.json"
+if [[ ! -f "$JSON" ]]; then
+  echo "No artifacts/last-upload.json — skip QR open." >&2
+  exit 0
+fi
+
+HTML="$(node -e "
+const fs = require('fs');
+const { writeLastUpload } = require('$ROOT/src/lib/upload-result.js');
+const data = JSON.parse(fs.readFileSync('$JSON', 'utf8'));
+const { htmlPath, payload } = writeLastUpload('$ROOT', data);
+const { platformLabel, modeLabel } = require('$ROOT/src/lib/upload-result.js');
+console.log(htmlPath);
+console.error('QR: ' + platformLabel(payload.platform) + ' · ' + modeLabel(payload.mode));
+")"
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  open "$HTML"
+elif command -v xdg-open >/dev/null 2>&1; then
+  xdg-open "$HTML" >/dev/null 2>&1 || true
+else
+  echo "QR page written: $HTML"
+fi

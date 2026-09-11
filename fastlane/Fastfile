@@ -1,0 +1,377 @@
+# frozen_string_literal: true
+
+require "fileutils"
+require_relative "lib/pgyer_upload"
+
+# Fastlane auto-loads auto_pack/.env; process ENV wins over dotenv defaults.
+opt_out_usage
+AUTO_PACK_ROOT = File.expand_path("..", __dir__)
+ARTIFACTS_DIR = File.join(AUTO_PACK_ROOT, "artifacts")
+PLATFORMS = %w[android ios harmony].freeze
+MODES_COMMON = %w[debug release].freeze
+MODES_HARMONY = %w[debug release profile].freeze
+PGYER_BUILD_TYPE = {
+  "android" => "android",
+  "ios" => "ios",
+  "harmony" => "harmonyos"
+}.freeze
+
+def resolve_app_root
+  root = ENV["APP_ROOT"].to_s.strip
+  if root.empty?
+    UI.user_error!(
+      "APP_ROOT is not set. Copy .env.example → .env and set APP_ROOT, " \
+      "or export APP_ROOT / choose it in Console."
+    )
+  end
+  File.expand_path(root)
+end
+
+def resolve_flutter_bin(app_root)
+  fvm_sdk = File.join(app_root, ".fvm", "flutter_sdk", "bin", "flutter")
+  return fvm_sdk if File.executable?(fvm_sdk)
+
+  UI.user_error!(
+    "Flutter SDK not found via App Root FVM (expected #{fvm_sdk}). " \
+    "Run `fvm install` / `fvm flutter --version` inside App Root first."
+  )
+end
+
+def resolve_flutter_root(flutter_bin)
+  File.realpath(File.expand_path("../..", flutter_bin))
+end
+
+# Pin FLUTTER_ROOT / FLUTTER_HOME to App Root FVM so a broken shell FLUTTER_HOME
+# cannot make Gradle's compileFlutterBuildRelease call the wrong (or missing) SDK.
+def pin_flutter_env!(flutter_bin)
+  root = resolve_flutter_root(flutter_bin)
+  ENV["FLUTTER_ROOT"] = root
+  ENV["FLUTTER_HOME"] = root
+  root
+end
+
+def sync_android_local_properties!(app_root, flutter_root)
+  android_dir = File.join(app_root, "android")
+  return unless Dir.exist?(android_dir)
+
+  props_path = File.join(android_dir, "local.properties")
+  map = {}
+  if File.file?(props_path)
+    File.readlines(props_path).each do |line|
+      trimmed = line.strip
+      next if trimmed.empty? || trimmed.start_with?("#")
+
+      key, value = trimmed.split("=", 2)
+      next if key.nil?
+
+      map[key.strip] = value.to_s.strip
+    end
+  end
+
+  map["flutter.sdk"] = flutter_root
+  sdk_dir = ENV["ANDROID_HOME"].to_s.strip
+  sdk_dir = ENV["ANDROID_SDK_ROOT"].to_s.strip if sdk_dir.empty?
+  home_sdk = File.expand_path("~/Library/Android/sdk")
+  sdk_dir = home_sdk if sdk_dir.empty? && Dir.exist?(home_sdk)
+  map["sdk.dir"] = sdk_dir unless sdk_dir.empty?
+
+  File.write(props_path, map.map { |k, v| "#{k}=#{v}" }.join("\n") + "\n")
+  UI.message("android/local.properties flutter.sdk → #{flutter_root}")
+end
+
+def resolve_pack_platform
+  platform = ENV.fetch("PACK_PLATFORM", "android").to_s.strip.downcase
+  UI.user_error!("PACK_PLATFORM must be android|ios|harmony (got #{platform})") unless PLATFORMS.include?(platform)
+  platform
+end
+
+def allowed_modes_for(platform)
+  platform == "harmony" ? MODES_HARMONY : MODES_COMMON
+end
+
+def resolve_pack_mode(platform = resolve_pack_platform)
+  mode = ENV.fetch("PACK_MODE", "debug").to_s.strip.downcase
+  allowed = allowed_modes_for(platform)
+  unless allowed.include?(mode)
+    UI.user_error!("PACK_MODE must be #{allowed.join('|')} for #{platform} (got #{mode})")
+  end
+  mode
+end
+
+def artifact_ext(platform, mode)
+  return "apk" if platform == "android"
+  return "ipa" if platform == "ios"
+  return "app" if platform == "harmony" && mode == "release"
+
+  "hap"
+end
+
+def artifact_name(platform, mode)
+  "#{platform}-#{mode}.#{artifact_ext(platform, mode)}"
+end
+
+def artifact_path(platform, mode)
+  File.join(ARTIFACTS_DIR, artifact_name(platform, mode))
+end
+
+def android_build_output(app_root, mode)
+  File.join(app_root, "build", "app", "outputs", "flutter-apk", "app-#{mode}.apk")
+end
+
+def harmony_hap_output(app_root, mode)
+  hap_dir = File.join(app_root, "build", "ohos", "hap")
+  candidates =
+    if mode == "profile"
+      %w[entry-profile-signed.hap entry-default-signed.hap]
+    else
+      %w[entry-default-signed.hap]
+    end
+  candidates.each do |name|
+    path = File.join(hap_dir, name)
+    return path if File.file?(path)
+  end
+  File.join(hap_dir, candidates.first)
+end
+
+def harmony_app_output(app_root)
+  candidates = []
+  app_copy = File.join(app_root, "build", "ohos", "app")
+  candidates.concat(Dir.glob(File.join(app_copy, "*.app"))) if Dir.exist?(app_copy)
+  outputs = File.join(app_root, "ohos", "build", "outputs")
+  candidates.concat(Dir.glob(File.join(outputs, "**", "*.app"))) if Dir.exist?(outputs)
+  return candidates.max_by { |p| File.mtime(p) } if candidates.any?
+
+  File.join(app_copy, "ohos-release-signed.app")
+end
+
+def harmony_build_output(app_root, mode)
+  mode == "release" ? harmony_app_output(app_root) : harmony_hap_output(app_root, mode)
+end
+
+def ios_build_output(app_root)
+  ipa_dir = File.join(app_root, "build", "ios", "ipa")
+  matches = Dir.glob(File.join(ipa_dir, "*.ipa"))
+  return matches.max_by { |p| File.mtime(p) } if matches.any?
+
+  nil
+end
+
+def resolve_pgyer_api_key
+  key = ENV["PGYER_API_KEY"].to_s.strip
+  UI.user_error!("PGYER_API_KEY missing. Set it in auto_pack/.env or the environment.") if key.empty?
+  key
+end
+
+IOS_EXPORT_METHODS = %w[ad-hoc app-store development enterprise].freeze
+
+# Default ad-hoc for debug and release (Pgyer / device install). Override with
+# IOS_EXPORT_METHOD or supply ExportOptions.plist via IOS_EXPORT_OPTIONS_PLIST.
+def resolve_ios_export_method(_mode)
+  explicit = ENV["IOS_EXPORT_METHOD"].to_s.strip.downcase
+  unless explicit.empty?
+    unless IOS_EXPORT_METHODS.include?(explicit)
+      UI.user_error!(
+        "IOS_EXPORT_METHOD must be #{IOS_EXPORT_METHODS.join('|')} (got #{explicit})"
+      )
+    end
+    return explicit
+  end
+  "ad-hoc"
+end
+
+# Homebrew Fastlane sets GEM_HOME/GEM_PATH for its own gems. Flutter's
+# `pod install` inherits them; CocoaPods then fails with MissingSpecError
+# (e.g. ffi / minitest). Strip those vars for every flutter subprocess.
+def sh_flutter!(*args)
+  sh("env", "-u", "GEM_HOME", "-u", "GEM_PATH", "-u", "BUNDLE_GEMFILE", *args)
+end
+
+def flutter_build_ios!(flutter, mode)
+  args = [flutter, "build", "ipa", "--#{mode}"]
+  plist = ENV["IOS_EXPORT_OPTIONS_PLIST"].to_s.strip
+  if !plist.empty?
+    plist_path = File.expand_path(plist)
+    UI.user_error!("IOS_EXPORT_OPTIONS_PLIST not found: #{plist_path}") unless File.file?(plist_path)
+    args += ["--export-options-plist", plist_path]
+    UI.message("iOS export options plist: #{plist_path}")
+  else
+    method = resolve_ios_export_method(mode)
+    args += ["--export-method", method]
+    UI.message("iOS export method: #{method}")
+  end
+  sh_flutter!(*args)
+end
+
+def flutter_build!(flutter, platform, mode)
+  case platform
+  when "android"
+    sh_flutter!(flutter, "build", "apk", "--#{mode}")
+  when "ios"
+    flutter_build_ios!(flutter, mode)
+  when "harmony"
+    if mode == "profile"
+      # OHOS product "profile": release build with flavor profile → .hap
+      sh_flutter!(flutter, "build", "hap", "--release", "--flavor", "profile")
+    elsif mode == "release"
+      # Official distribution package → .app (AppGallery), not .hap
+      sh_flutter!(flutter, "build", "app", "--release", "--flavor", "release")
+    else
+      sh_flutter!(flutter, "build", "hap", "--#{mode}")
+    end
+  else
+    UI.user_error!("Unsupported platform: #{platform}")
+  end
+end
+
+def copy_build_artifact!(app_root, platform, mode)
+  source =
+    case platform
+    when "android"
+      android_build_output(app_root, mode)
+    when "ios"
+      ios_build_output(app_root)
+    when "harmony"
+      harmony_build_output(app_root, mode)
+    end
+
+  if source.nil? || !File.file?(source)
+    hint =
+      if platform == "ios"
+        "No IPA under build/ios/ipa/. Check Xcode signing / Ad Hoc provisioning " \
+        "(Distribution cert + devices in profile), or set IOS_EXPORT_METHOD / IOS_EXPORT_OPTIONS_PLIST."
+      else
+        "Expected build output missing: #{source}"
+      end
+    UI.user_error!(hint)
+  end
+
+  FileUtils.mkdir_p(ARTIFACTS_DIR)
+  dest = artifact_path(platform, mode)
+  FileUtils.cp(source, dest)
+  UI.success("Artifact: #{dest}")
+  dest
+end
+
+def write_upload_result!(platform, mode, result)
+  require "json"
+  note = ENV["PGYER_UPDATE_DESCRIPTION"].to_s.strip
+  item = {
+    "platform" => platform,
+    "mode" => mode,
+    "buildName" => result["buildName"].to_s,
+    "buildVersion" => result["buildVersion"].to_s,
+    "buildVersionNo" => result["buildVersionNo"].to_s,
+    "installUrl" => result["installUrl"].to_s,
+    "buildQRCodeURL" => result["buildQRCodeURL"].to_s
+  }
+  payload = item.merge(
+    "updateDescription" => note,
+    "uploads" => [item],
+    "updatedAt" => Time.now.utc.iso8601
+  )
+  FileUtils.mkdir_p(ARTIFACTS_DIR)
+  json_path = File.join(ARTIFACTS_DIR, "last-upload.json")
+  File.write(json_path, JSON.pretty_generate(payload) + "\n")
+  UI.success("Upload result: #{json_path}")
+  UI.message("Platform: #{platform} | Mode: #{mode}")
+  UI.message("Install note: #{note}") unless note.empty?
+end
+
+# After a successful Pgyer upload, drop the local package copy to free disk.
+# Keeps last-upload.json / QR HTML — those are not install packages.
+def remove_uploaded_artifact!(file)
+  path = file.to_s
+  return if path.empty? || !File.file?(path)
+
+  FileUtils.rm_f(path)
+  UI.success("Removed local artifact: #{path}")
+end
+
+default_platform(:android)
+
+platform :android do
+  desc "Build one platform×mode package into auto_pack/artifacts/ (PACK_PLATFORM, PACK_MODE)"
+  lane :build do
+    platform = resolve_pack_platform
+    mode = resolve_pack_mode(platform)
+    app_root = resolve_app_root
+    UI.user_error!("App Root does not exist: #{app_root}") unless Dir.exist?(app_root)
+
+    flutter = resolve_flutter_bin(app_root)
+    flutter_root = pin_flutter_env!(flutter)
+    UI.message("App Root: #{app_root}")
+    UI.message("Flutter:  #{flutter}")
+    UI.message("Target:   #{platform} / #{mode}")
+
+    if platform == "android"
+      sync_android_local_properties!(app_root, flutter_root)
+    end
+
+    Dir.chdir(app_root) do
+      sh_flutter!(flutter, "pub", "get")
+      flutter_build!(flutter, platform, mode)
+    end
+
+    copy_build_artifact!(app_root, platform, mode)
+  end
+
+  desc "Upload the selected platform×mode artifact to Pgyer"
+  lane :upload_pgyer do
+    platform = resolve_pack_platform
+    mode = resolve_pack_mode(platform)
+
+    if platform == "harmony" && mode == "release"
+      UI.user_error!(
+        "Harmony release produces .app (AppGallery). Pgyer only accepts .hap — " \
+        "upload debug/profile HAP, or distribute the .app outside Pgyer."
+      )
+    end
+
+    file = artifact_path(platform, mode)
+    UI.user_error!("Artifact missing: #{file}. Run build first for #{platform}/#{mode}.") unless File.file?(file)
+
+    update_description = ENV["PGYER_UPDATE_DESCRIPTION"].to_s.strip
+    if update_description.empty?
+      update_description = "Auto Pack #{platform} #{mode} upload #{Time.now.strftime('%Y-%m-%d %H:%M')}"
+    end
+    password = ENV["PGYER_PASSWORD"].to_s.strip
+    password = nil if password.empty?
+
+    result = PgyerUpload.upload!(
+      file: file,
+      api_key: resolve_pgyer_api_key,
+      build_type: PGYER_BUILD_TYPE.fetch(platform),
+      update_description: update_description,
+      install_type: ENV.fetch("PGYER_INSTALL_TYPE", "1"),
+      password: password
+    )
+
+    UI.success("Pgyer App: #{result['buildName']} #{result['buildVersion']} (#{result['buildVersionNo']})")
+    UI.success("Install URL: #{result['installUrl']}") if result["installUrl"]
+    UI.success("QR Code: #{result['buildQRCodeURL']}") if result["buildQRCodeURL"].to_s != ""
+    write_upload_result!(platform, mode, result)
+    remove_uploaded_artifact!(file)
+    result
+  end
+
+  desc "Build then upload (PACK_PLATFORM × PACK_MODE)"
+  lane :distribute do
+    build
+    upload_pgyer
+  end
+
+  # Backward-compatible aliases (android/debug)
+  desc "Alias: PACK_PLATFORM=android PACK_MODE=debug → build"
+  lane :build_debug do
+    ENV["PACK_PLATFORM"] = "android" if ENV["PACK_PLATFORM"].to_s.strip.empty?
+    ENV["PACK_MODE"] = "debug" if ENV["PACK_MODE"].to_s.strip.empty?
+    build
+  end
+
+  desc "Alias: android debug distribute"
+  lane :distribute_debug do
+    ENV["PACK_PLATFORM"] = "android" if ENV["PACK_PLATFORM"].to_s.strip.empty?
+    ENV["PACK_MODE"] = "debug" if ENV["PACK_MODE"].to_s.strip.empty?
+    distribute
+  end
+end

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Backward-compatible alias: android debug build.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$ROOT/bin/build" --platform android --mode debug "$@"

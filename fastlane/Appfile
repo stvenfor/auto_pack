@@ -1,0 +1,2 @@
+# Electro owns Fastlane; App Root stays free of pipeline files.
+# No Apple/Google store credentials needed for debug APK builds.

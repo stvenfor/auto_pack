@@ -1,0 +1,17 @@
+{
+  "name": "auto-pack",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Auto Pack — local Flutter pack & Pgyer distribute console",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^37.2.6"
+  }
+}

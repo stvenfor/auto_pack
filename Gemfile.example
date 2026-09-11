@@ -1,0 +1,5 @@
+# Use Homebrew fastlane by default (`brew install fastlane`).
+# Bundler is optional; only needed if you prefer `bundle exec`.
+source "https://rubygems.org"
+
+gem "fastlane"
