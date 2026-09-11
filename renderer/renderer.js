@@ -5,6 +5,10 @@ const runs = new Map();
 let activeRunId = null;
 let readiness = null;
 let suppressBranchChange = false;
+/** @type {"focus" | "all"} */
+let logMode = "focus";
+
+const { buildLogView } = window.AutoPackLogFilter;
 
 const el = {
   appRoot: document.getElementById("app-root"),
@@ -23,6 +27,7 @@ const el = {
   btnDistribute: document.getElementById("btn-distribute"),
   runTabs: document.getElementById("run-tabs"),
   log: document.getElementById("log"),
+  logMeta: document.getElementById("log-meta"),
   cancel: document.getElementById("cancel-run"),
 };
 
@@ -75,6 +80,13 @@ function syncModeEnabled() {
     const box = row.querySelector('input[type="checkbox"]');
     const select = row.querySelector("select");
     if (select) select.disabled = !box?.checked;
+  }
+}
+
+function syncLogModeButtons() {
+  for (const btn of document.querySelectorAll(".log-filter-btn")) {
+    const mode = btn.getAttribute("data-log-mode");
+    btn.classList.toggle("active", mode === logMode);
   }
 }
 
@@ -181,9 +193,14 @@ function renderTabs() {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `run-tab${run.id === activeRunId ? " active" : ""}`;
+    btn.setAttribute("data-status", run.status);
     const st = statusLabel[run.status] || run.status;
     const who = run.summary || `${run.platform}/${run.mode}`;
-    btn.textContent = `${run.lane} ${who} · ${st}`;
+    const dot = document.createElement("span");
+    dot.className = "run-tab-dot";
+    dot.setAttribute("aria-hidden", "true");
+    btn.appendChild(dot);
+    btn.appendChild(document.createTextNode(`${run.lane} ${who} · ${st}`));
     btn.addEventListener("click", () => {
       activeRunId = run.id;
       renderTabs();
@@ -197,10 +214,24 @@ function renderTabs() {
 
 function renderLog() {
   const run = activeRunId ? runs.get(activeRunId) : null;
-  el.log.textContent = run ? run.log : "";
-  if (run) {
-    el.log.scrollTop = el.log.scrollHeight;
+  if (!run) {
+    el.log.textContent = "";
+    if (el.logMeta) el.logMeta.textContent = "";
+    return;
   }
+
+  const view = buildLogView(run.log, logMode);
+  el.log.innerHTML = view.html;
+  if (el.logMeta) {
+    if (logMode === "focus" && view.hidden > 0) {
+      el.logMeta.textContent = `显示 ${view.shown} / ${view.total} 行 · 已隐藏 ${view.hidden} 条噪声`;
+    } else if (view.total > 0) {
+      el.logMeta.textContent = `${view.total} 行`;
+    } else {
+      el.logMeta.textContent = "";
+    }
+  }
+  el.log.scrollTop = el.log.scrollHeight;
 }
 
 async function loadReadiness() {
@@ -222,6 +253,16 @@ document.getElementById("pick-app-root").addEventListener("click", async () => {
     await loadReadiness();
   }
 });
+
+for (const btn of document.querySelectorAll(".log-filter-btn")) {
+  btn.addEventListener("click", () => {
+    const mode = btn.getAttribute("data-log-mode");
+    if (mode !== "focus" && mode !== "all") return;
+    logMode = mode;
+    syncLogModeButtons();
+    renderLog();
+  });
+}
 
 el.targetList.addEventListener("change", () => {
   syncModeEnabled();
@@ -321,6 +362,7 @@ window.autoPack.onRunFinished(({ id, code, signal, cancelled }) => {
 
 syncModeEnabled();
 syncTargetHint();
+syncLogModeButtons();
 renderLog();
 loadReadiness().catch((err) => {
   el.actionHint.textContent = String(err);
