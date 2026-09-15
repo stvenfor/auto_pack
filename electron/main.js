@@ -44,6 +44,9 @@ function openUploadQrWindow(fallback = {}) {
     saved.updateDescription ||
     fallback.updateDescription ||
     "";
+  const product = Boolean(
+    saved.product ?? fallback.product ?? false
+  );
   const merged =
     saved.mergedInstallUrl ||
     readMergedInstallUrl(PACK_ROOT) ||
@@ -73,13 +76,15 @@ function openUploadQrWindow(fallback = {}) {
     uploads,
     updateDescription: note,
     mergedInstallUrl: merged,
+    product,
   });
 
-  const title = merged
+  const titleBase = merged
     ? "合并安装页"
     : uploads.length > 1
       ? "多平台安装"
       : `${platformLabel(payload.platform)} · ${modeLabel(payload.mode)}`;
+  const title = product ? `${titleBase} · PRODUCT` : titleBase;
 
   if (qrWindow && !qrWindow.isDestroyed()) {
     qrWindow.close();
@@ -202,6 +207,10 @@ ipcMain.handle("run:start", (_event, payload) => {
     typeof payload === "object" && payload
       ? String(payload.updateDescription || "").trim()
       : "";
+  const product =
+    typeof payload === "object" && payload
+      ? Boolean(payload.product)
+      : false;
 
   let targets;
   try {
@@ -262,6 +271,7 @@ ipcMain.handle("run:start", (_event, payload) => {
     platform: targets[0].platform,
     mode: targets[0].mode,
     summary,
+    product,
   });
 
   const batch = startCompositeRun({
@@ -269,6 +279,7 @@ ipcMain.handle("run:start", (_event, payload) => {
     lane,
     targets,
     updateDescription,
+    product,
     onLog: (chunk) => send("run:log", { id: runId, stream: "stdout", chunk }),
     onTargetStart: () => {},
   });
@@ -286,6 +297,7 @@ ipcMain.handle("run:start", (_event, payload) => {
       code: result.cancelled ? null : result.code,
       signal: result.signal,
       cancelled: Boolean(result.cancelled),
+      product,
     });
     if (
       !result.cancelled &&
@@ -294,7 +306,7 @@ ipcMain.handle("run:start", (_event, payload) => {
       result.uploads.length
     ) {
       try {
-        openUploadQrWindow({ updateDescription });
+        openUploadQrWindow({ updateDescription, product });
       } catch (err) {
         send("run:log", {
           id: runId,

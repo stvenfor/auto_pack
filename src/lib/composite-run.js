@@ -21,8 +21,10 @@ const DISTRIBUTE_LANES = new Set(["distribute", "distribute_debug"]);
  * Execute targets for a composite Console Run.
  *
  * Multi-Target build / distribute:
- *   shared prep_deps → parallel build (PACK_SKIP_PUB_GET) → parallel upload_pgyer
+ *   shared prep_deps → android/ios parallel + harmony serial (PACK_SKIP_PUB_GET)
+ *   → parallel upload_pgyer for Targets that built successfully
  *   (per-Target result files; Node aggregates last-upload.json after all settle).
+ * Peer build failures no longer cancel siblings.
  * Multi-Target upload_pgyer: parallel uploads only.
  * Single-Target: one Fastlane lane (sequential).
  *
@@ -33,6 +35,8 @@ function startCompositeRun({
   lane,
   targets,
   updateDescription = "",
+  product = false,
+  dartDefines = [],
   onLog,
   onTargetStart,
   startLaneFn = defaultStartLane,
@@ -42,6 +46,14 @@ function startCompositeRun({
   const active = new Set();
   const uploads = [];
   const note = String(updateDescription || "").trim();
+  const packProduct = Boolean(product);
+  const packDefines = Array.isArray(dartDefines) ? dartDefines : [];
+
+  if (packProduct) {
+    onLog?.(
+      "\n[auto_pack] 上架包 PRODUCT：注入 --dart-define=TF_NET_PRODUCT=true（隐藏测试球并锁正式环境）\n"
+    );
+  }
 
   function track(handle) {
     if (!handle) return handle;
@@ -94,6 +106,7 @@ function startCompositeRun({
       uploads,
       updateDescription: note,
       mergedInstallUrl,
+      product: packProduct,
     });
   }
 
@@ -113,6 +126,8 @@ function startCompositeRun({
       platform: target.platform,
       mode: target.mode,
       updateDescription: note,
+      product: packProduct,
+      dartDefines: packDefines,
       skipPubGet: Boolean(opts.skipPubGet),
       onStdout: (chunk) => onLog?.(prefixChunk(label, chunk)),
       onStderr: (chunk) => onLog?.(prefixChunk(label, chunk)),
@@ -152,69 +167,190 @@ function startCompositeRun({
     return { ...result, cancelled: false };
   }
 
-  /**
-   * Parallel builds; on first failure cancel siblings and return that failure.
-   * @param {Array<{ platform: string, mode: string }>} buildTargets
-   * @param {{ skipPubGet: boolean }} opts
-   */
-  async function runBuildsParallel(buildTargets, opts) {
+/**
+ * Parallel builds for one group. Peer failures do NOT cancel siblings —
+ * App Root builds often race (ohpm / Flutter lock); killing survivors wastes
+ * almost-finished Android/iOS work. User cancel still aborts all.
+ *
+ * @param {Array<{ platform: string, mode: string }>} buildTargets
+ * @param {{ skipPubGet: boolean }} opts
+ * @returns {Promise<{
+ *   code: number|null,
+ *   signal: string|null,
+ *   cancelled: boolean,
+ *   succeeded: Array<object>,
+ *   failed: Array<object>,
+ *   failedTarget: object|null,
+ * }>}
+ */
+async function runBuildsParallel(buildTargets, opts) {
+  if (!buildTargets.length) {
+    return {
+      code: 0,
+      signal: null,
+      cancelled: false,
+      succeeded: [],
+      failed: [],
+      failedTarget: null,
+    };
+  }
+
+  onLog?.(
+    `\n[parallel] building ${buildTargets.length} Target(s) concurrently (${buildTargets.map(targetLabel).join(", ")})\n`
+  );
+
+  const results = await Promise.all(
+    buildTargets.map((target) => runOneTarget(target, "build", opts))
+  );
+
+  if (cancelled) {
+    const failed = results.filter((r) => r.cancelled || r.code !== 0);
+    return {
+      code: failed[0]?.code ?? 1,
+      signal: failed[0]?.signal ?? null,
+      cancelled: true,
+      succeeded: results.filter((r) => !r.cancelled && r.code === 0).map((r) => r.target),
+      failed: failed.map((r) => r.target),
+      failedTarget: failed[0]?.target ?? null,
+    };
+  }
+
+  const succeeded = [];
+  const failed = [];
+  /** @type {object | null} */
+  let firstFailure = null;
+  for (const result of results) {
+    if (result.code === 0) {
+      succeeded.push(result.target);
+    } else {
+      failed.push(result.target);
+      if (!firstFailure) firstFailure = result;
+      maybeLogHarmonyHint(result);
+    }
+  }
+
+  if (failed.length && succeeded.length) {
     onLog?.(
-      `\n[parallel] building ${buildTargets.length} Targets concurrently\n`
+      `\n[parallel] build partial success: ok=[${succeeded.map(targetLabel).join(", ")}] failed=[${failed.map(targetLabel).join(", ")}]\n`
     );
-
-    const pending = buildTargets.map((target) =>
-      runOneTarget(target, "build", opts).then((result) => ({ result }))
+  } else if (failed.length) {
+    onLog?.(
+      `\n[parallel] all builds failed: [${failed.map(targetLabel).join(", ")}]\n`
     );
+  }
 
-    /** @type {Array<{ result: object }>} */
-    const settled = [];
-    let firstFailure = null;
+  return {
+    code: firstFailure ? firstFailure.code : 0,
+    signal: firstFailure ? firstFailure.signal : null,
+    cancelled: false,
+    succeeded,
+    failed,
+    failedTarget: firstFailure?.target ?? null,
+  };
+}
 
-    await Promise.all(
-      pending.map(async (p) => {
-        const item = await p;
-        settled.push(item);
-        const { result } = item;
-        if (!firstFailure && !result.cancelled && result.code !== 0) {
-          firstFailure = result;
-          for (const handle of [...active]) {
-            handle.cancel();
-          }
-        }
-      })
-    );
+function maybeLogHarmonyHint(result) {
+  if (result?.target?.platform !== "harmony") return;
+  onLog?.(
+    `\n[auto_pack] Harmony 构建失败常见原因：ohpm 缺本地 flutter.har（plugin_links/*/libs|har）或依赖损坏。` +
+      `构建前会自动补齐 flutter.har 并 ohpm install；若仍失败，在 App Root/ohos 执行 ohpm clean 后再打一次。\n`
+  );
+}
 
+/**
+ * Build Targets with App Root isolation:
+ *   1) android + ios in parallel
+ *   2) harmony alone afterward (ohpm/hvigor races hard against Gradle/Xcode)
+ */
+async function runBuildsScheduled(buildTargets, opts) {
+  const mobile = buildTargets.filter((t) => t.platform !== "harmony");
+  const harmony = buildTargets.filter((t) => t.platform === "harmony");
+
+  /** @type {Array<object>} */
+  const succeeded = [];
+  /** @type {Array<object>} */
+  const failed = [];
+  /** @type {object | null} */
+  let firstFailure = null;
+
+  if (mobile.length) {
+    const phase = await runBuildsParallel(mobile, opts);
+    succeeded.push(...phase.succeeded);
+    failed.push(...phase.failed);
+    if (phase.failedTarget && !firstFailure) {
+      firstFailure = {
+        code: phase.code,
+        signal: phase.signal,
+        target: phase.failedTarget,
+      };
+    }
+    if (phase.cancelled || cancelled) {
+      return {
+        code: phase.code,
+        signal: phase.signal,
+        cancelled: true,
+        succeeded,
+        failed,
+        failedTarget: phase.failedTarget,
+      };
+    }
+  }
+
+  for (const target of harmony) {
     if (cancelled) {
       return {
         code: firstFailure?.code ?? 1,
         signal: firstFailure?.signal ?? null,
         cancelled: true,
-        failedTarget: firstFailure?.target,
+        succeeded,
+        failed,
+        failedTarget: firstFailure?.target ?? null,
       };
     }
-
-    if (firstFailure) {
+    onLog?.(
+      `\n[serial] building Harmony alone (avoid ohpm/hvigor racing Android/iOS)\n`
+    );
+    const result = await runOneTarget(target, "build", opts);
+    if (cancelled) {
       return {
-        code: firstFailure.code,
-        signal: firstFailure.signal,
-        cancelled: false,
-        failedTarget: firstFailure.target,
+        code: result.code,
+        signal: result.signal,
+        cancelled: true,
+        succeeded,
+        failed: [...failed, target],
+        failedTarget: target,
       };
     }
-
-    for (const { result } of settled) {
-      if (result.code !== 0) {
-        return {
+    if (result.code === 0) {
+      succeeded.push(target);
+    } else {
+      failed.push(target);
+      maybeLogHarmonyHint(result);
+      if (!firstFailure) {
+        firstFailure = {
           code: result.code,
           signal: result.signal,
-          cancelled: false,
-          failedTarget: result.target,
+          target,
         };
       }
     }
-
-    return { code: 0, signal: null, cancelled: false };
   }
+
+  if (failed.length && succeeded.length) {
+    onLog?.(
+      `\n[auto_pack] build finished with partial success: ok=[${succeeded.map(targetLabel).join(", ")}] failed=[${failed.map(targetLabel).join(", ")}]\n`
+    );
+  }
+
+  return {
+    code: firstFailure ? firstFailure.code : 0,
+    signal: firstFailure ? firstFailure.signal : null,
+    cancelled: false,
+    succeeded,
+    failed,
+    failedTarget: firstFailure?.target ?? null,
+  };
+}
 
   /**
    * Parallel uploads; wait for all. Collect successes even if some fail.
@@ -373,7 +509,7 @@ function startCompositeRun({
       return runSequential();
     }
 
-    // Multi-Target: shared prep → parallel builds → optional parallel uploads
+    // Multi-Target: shared prep → scheduled builds → optional parallel uploads
     const prep = await runPrepDeps();
     if (prep.cancelled) {
       return { code: prep.code, signal: prep.signal, cancelled: true, uploads };
@@ -388,7 +524,7 @@ function startCompositeRun({
       };
     }
 
-    const buildPhase = await runBuildsParallel(targets, { skipPubGet: true });
+    const buildPhase = await runBuildsScheduled(targets, { skipPubGet: true });
     if (buildPhase.cancelled) {
       return {
         code: buildPhase.code,
@@ -398,9 +534,11 @@ function startCompositeRun({
         failedTarget: buildPhase.failedTarget,
       };
     }
-    if (buildPhase.code !== 0) {
+
+    const builtOk = buildPhase.succeeded || [];
+    if (!builtOk.length) {
       return {
-        code: buildPhase.code,
+        code: buildPhase.code || 1,
         signal: buildPhase.signal,
         cancelled: false,
         uploads,
@@ -408,19 +546,53 @@ function startCompositeRun({
       };
     }
 
+    // Build-only lane: partial success still counts as overall failure if any failed,
+    // but artifacts for successes are already in place.
     if (!DISTRIBUTE_LANES.has(lane)) {
-      return { code: 0, signal: null, cancelled: false, uploads };
+      return {
+        code: buildPhase.failed?.length ? buildPhase.code || 1 : 0,
+        signal: buildPhase.failed?.length ? buildPhase.signal : null,
+        cancelled: false,
+        uploads,
+        failedTarget: buildPhase.failedTarget,
+        builtTargets: builtOk,
+      };
     }
 
     const uploadTargets = logSkippedUploads(
-      targets.filter((t) => supportsPgyerUpload(t.platform, t.mode))
+      builtOk.filter((t) => supportsPgyerUpload(t.platform, t.mode))
     );
+    if (buildPhase.failed?.length) {
+      onLog?.(
+        `\n[auto_pack] skip upload for failed builds: [${buildPhase.failed.map(targetLabel).join(", ")}]\n`
+      );
+    }
     if (!uploadTargets.length) {
-      return { code: 0, signal: null, cancelled: false, uploads };
+      return {
+        code: buildPhase.failed?.length ? buildPhase.code || 1 : 0,
+        signal: buildPhase.failed?.length ? buildPhase.signal : null,
+        cancelled: false,
+        uploads,
+        failedTarget: buildPhase.failedTarget,
+        builtTargets: builtOk,
+      };
     }
 
     const uploadPhase = await runUploadsParallel(uploadTargets);
-    return { ...uploadPhase, uploads };
+    // Prefer upload failure code; else surface build partial-failure code.
+    const code =
+      uploadPhase.code !== 0
+        ? uploadPhase.code
+        : buildPhase.failed?.length
+          ? buildPhase.code || 1
+          : 0;
+    return {
+      ...uploadPhase,
+      code,
+      uploads,
+      failedTarget: uploadPhase.failedTarget || buildPhase.failedTarget,
+      builtTargets: builtOk,
+    };
   })();
 
   return {

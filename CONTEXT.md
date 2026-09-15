@@ -49,5 +49,5 @@ _Avoid_: Dashboard、GUI 工具、Electron 应用（除非特指技术实现）
 _Avoid_: Health check、环境检测（口语可以，正式用语用 Readiness）
 
 **Run**:
-Console 里一次操作：可含多个 Target。多 Target 的构建/构建并上传：先共享 `prep_deps`（一次 `flutter pub get`），再并行各端 `build`（`PACK_SKIP_PUB_GET`），再并行上传蒲公英（每端写 `last-upload-{platform}-{mode}.json`，结束后 Node 汇总 `last-upload.json`；部分失败仍保留成功端）。多 Target 仅上传同样并行。单 Target 仍走原串行 lane。同一日志流（带平台前缀；共享准备为 `[shared]`），一个取消打断整批。同一时刻最多一个会改 App Root 的构建类 Run；上传类可与构建并行。上传成功后：有 Merged Install Page 则优先打开；否则同窗多卡展示各平台二维码，并显示本次 Install Note（若有）。
+Console 里一次操作：可含多个 Target。多 Target 的构建/构建并上传：先共享 `prep_deps`（一次 `flutter pub get`），再 **Android+iOS 并行构建**、**Harmony 单独串行**（`PACK_SKIP_PUB_GET`；避免 ohpm/hvigor 与其它端抢 App Root）；某端构建失败**不取消**其它端，上传只对构建成功的 Target。再并行上传蒲公英（每端写 `last-upload-{platform}-{mode}.json`，结束后 Node 汇总 `last-upload.json`；部分失败仍保留成功端）。多 Target 仅上传同样并行。单 Target 仍走原串行 lane。同一日志流（带平台前缀；共享准备为 `[shared]`），一个取消打断整批。同一时刻最多一个会改 App Root 的构建类 Run；上传类可与构建并行。上传成功后：有 Merged Install Page 则优先打开；否则同窗多卡展示各平台二维码，并显示本次 Install Note（若有）。
 _Avoid_: Job、Task、Build（Build 仅指构建动作本身，不是一次 Console 调用）

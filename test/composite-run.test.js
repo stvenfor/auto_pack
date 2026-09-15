@@ -249,6 +249,127 @@ describe("startCompositeRun parallel builds", () => {
     assert.equal(result.cancelled, true);
   });
 
+  it("keeps sibling builds when one peer fails (no cancel-on-fail)", async () => {
+    const { startLaneFn, calls } = fakeLane({
+      results: {
+        prep_deps: { code: 0, delay: 2 },
+        "build:android/debug": { code: 0, delay: 40 },
+        "build:ios/debug": { code: 7, delay: 10 },
+      },
+    });
+
+    const batch = startCompositeRun({
+      packRoot: "/tmp/auto_pack_test",
+      lane: "build",
+      targets: [
+        { platform: "android", mode: "debug" },
+        { platform: "ios", mode: "debug" },
+      ],
+      startLaneFn,
+      onLog: () => {},
+    });
+
+    const result = await batch.done;
+    assert.equal(result.code, 7);
+    assert.equal(result.cancelled, false);
+    assert.equal(calls.filter((c) => c.lane === "build").length, 2);
+    assert.deepEqual(
+      (result.builtTargets || []).map((t) => t.platform),
+      ["android"]
+    );
+  });
+
+  it("builds harmony alone after android/ios parallel group", async () => {
+    const timeline = [];
+    const { startLaneFn } = fakeLane({
+      results: {
+        prep_deps: { code: 0, delay: 2 },
+        "build:android/debug": { code: 0, delay: 30 },
+        "build:ios/debug": { code: 0, delay: 30 },
+        "build:harmony/profile": { code: 0, delay: 20 },
+      },
+      log: (msg) => timeline.push({ t: Date.now(), msg }),
+    });
+
+    const startedAt = Date.now();
+    const batch = startCompositeRun({
+      packRoot: "/tmp/auto_pack_test",
+      lane: "build",
+      targets: [
+        { platform: "android", mode: "debug" },
+        { platform: "ios", mode: "debug" },
+        { platform: "harmony", mode: "profile" },
+      ],
+      startLaneFn,
+      onLog: () => {},
+    });
+
+    const result = await batch.done;
+    assert.equal(result.code, 0);
+
+    const androidStart = timeline.find((x) =>
+      x.msg.includes("build android/debug")
+    );
+    const iosStart = timeline.find((x) => x.msg.includes("build ios/debug"));
+    const harmonyStart = timeline.find((x) =>
+      x.msg.includes("build harmony/profile")
+    );
+    assert.ok(androidStart && iosStart && harmonyStart);
+    // Harmony starts after the mobile pair has had time to overlap (not with them).
+    assert.ok(
+      harmonyStart.t - startedAt >= 25,
+      `harmony started too early: ${harmonyStart.t - startedAt}ms`
+    );
+    assert.ok(
+      Math.abs(androidStart.t - iosStart.t) < 15,
+      "android/ios should start together"
+    );
+  });
+
+  it("distribute uploads only targets that built successfully", async () => {
+    const fs = require("node:fs");
+    const os = require("node:os");
+    const path = require("node:path");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "auto_pack_partial-"));
+    fs.mkdirSync(path.join(root, "artifacts"));
+    fs.writeFileSync(
+      path.join(root, "artifacts", "last-upload-android-debug.json"),
+      JSON.stringify({
+        platform: "android",
+        mode: "debug",
+        installUrl: "https://www.pgyer.com/a",
+        buildQRCodeURL: "https://www.pgyer.com/qr/a",
+      })
+    );
+
+    const { startLaneFn, calls } = fakeLane({
+      results: {
+        prep_deps: { code: 0, delay: 2 },
+        "build:android/debug": { code: 0, delay: 15 },
+        "build:ios/debug": { code: 3, delay: 10 },
+        "upload_pgyer:android/debug": { code: 0, delay: 10 },
+      },
+    });
+
+    const batch = startCompositeRun({
+      packRoot: root,
+      lane: "distribute",
+      targets: [
+        { platform: "android", mode: "debug" },
+        { platform: "ios", mode: "debug" },
+      ],
+      startLaneFn,
+      onLog: () => {},
+    });
+
+    const result = await batch.done;
+    assert.equal(result.code, 3);
+    assert.equal(calls.filter((c) => c.lane === "upload_pgyer").length, 1);
+    assert.equal(calls.find((c) => c.lane === "upload_pgyer")?.platform, "android");
+    assert.equal(result.uploads.length, 1);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
   it("aborts when prep_deps fails", async () => {
     const { startLaneFn, calls } = fakeLane({
       results: {

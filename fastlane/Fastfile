@@ -186,8 +186,28 @@ def sh_flutter!(*args)
   sh("env", "-u", "GEM_HOME", "-u", "GEM_PATH", "-u", "BUNDLE_GEMFILE", *args)
 end
 
+# Newline-separated KEY=value from PACK_DART_DEFINES (set by Console / CLI).
+def resolve_dart_define_args
+  raw = ENV["PACK_DART_DEFINES"].to_s
+  specs = raw.split(/\r?\n/).map(&:strip).reject(&:empty?)
+  specs.map do |spec|
+    UI.user_error!("Invalid PACK_DART_DEFINES entry (expected KEY=value): #{spec}") unless spec.include?("=")
+    "--dart-define=#{spec}"
+  end
+end
+
+def append_dart_defines!(args)
+  defines = resolve_dart_define_args
+  return args if defines.empty?
+
+  UI.message("Dart defines: #{defines.map { |d| d.sub(/\A--dart-define=/, '') }.join(', ')}")
+  product = defines.any? { |d| d == "--dart-define=TF_NET_PRODUCT=true" }
+  UI.message("Pack profile: PRODUCT (store / hide test ball + lock product env)") if product
+  args + defines
+end
+
 def flutter_build_ios!(flutter, mode)
-  args = [flutter, "build", "ipa", "--#{mode}"]
+  args = append_dart_defines!([flutter, "build", "ipa", "--#{mode}"])
   plist = ENV["IOS_EXPORT_OPTIONS_PLIST"].to_s.strip
   if !plist.empty?
     plist_path = File.expand_path(plist)
@@ -205,21 +225,81 @@ end
 def flutter_build!(flutter, platform, mode)
   case platform
   when "android"
-    sh_flutter!(flutter, "build", "apk", "--#{mode}")
+    sh_flutter!(*append_dart_defines!([flutter, "build", "apk", "--#{mode}"]))
   when "ios"
     flutter_build_ios!(flutter, mode)
   when "harmony"
+    ensure_harmony_ohpm!(resolve_app_root, mode)
     if mode == "profile"
       # OHOS product "profile": release build with flavor profile → .hap
-      sh_flutter!(flutter, "build", "hap", "--release", "--flavor", "profile")
+      sh_flutter!(*append_dart_defines!([flutter, "build", "hap", "--release", "--flavor", "profile"]))
     elsif mode == "release"
       # Official distribution package → .app (AppGallery), not .hap
-      sh_flutter!(flutter, "build", "app", "--release", "--flavor", "release")
+      sh_flutter!(*append_dart_defines!([flutter, "build", "app", "--release", "--flavor", "release"]))
     else
-      sh_flutter!(flutter, "build", "hap", "--#{mode}")
+      sh_flutter!(*append_dart_defines!([flutter, "build", "hap", "--#{mode}"]))
     end
   else
     UI.user_error!("Unsupported platform: #{platform}")
+  end
+end
+
+# Harmony ohpm needs local flutter.har under ohos/har and each plugin's
+# libs|har path. Parallel / interrupted builds (or `ohpm clean`) often wipe
+# these files; hvigor then fails with "Fetch Local Package Failed".
+def ensure_harmony_ohpm!(app_root, mode)
+  ohos = File.join(app_root, "ohos")
+  UI.user_error!("Harmony ohos/ missing under App Root: #{ohos}") unless Dir.exist?(ohos)
+
+  flutter_bin = resolve_flutter_bin(app_root)
+  flutter_root = resolve_flutter_root(flutter_bin)
+  engine_mode =
+    case mode.to_s
+    when "debug" then ""
+    when "profile" then "-profile"
+    else "-release"
+    end
+  candidates = [
+    File.join(flutter_root, "bin/cache/artifacts/engine/ohos-arm64#{engine_mode}/flutter.har"),
+    File.join(flutter_root, "bin/cache/artifacts/engine/ohos-arm64-release/flutter.har"),
+    File.join(flutter_root, "bin/cache/artifacts/engine/ohos-arm64/flutter.har")
+  ]
+  src = candidates.find { |p| File.file?(p) }
+  UI.user_error!("flutter.har not found under FVM engine cache (tried #{candidates.join(', ')})") if src.nil?
+
+  har_dir = File.join(ohos, "har")
+  FileUtils.mkdir_p(har_dir)
+  dest_root = File.join(har_dir, "flutter.har")
+  FileUtils.cp(src, dest_root)
+  UI.message("Harmony flutter.har → #{dest_root}")
+
+  copied = 0
+  Dir.glob(File.join(ohos, "**", "oh-package.json5")).each do |pkg|
+    next if pkg.include?("/oh_modules/") || pkg.include?("/.hvigor/") || pkg.include?("/build/") || pkg.include?("/node_modules/")
+
+    text = File.read(pkg)
+    text.scan(/"@ohos\/flutter_ohos"\s*:\s*"file:([^"]+)"/).flatten.each do |rel|
+      rel = rel.sub(%r{\A\./}, "")
+      dest = File.expand_path(rel, File.dirname(pkg))
+      FileUtils.mkdir_p(File.dirname(dest))
+      next if File.file?(dest) && File.size(dest) == File.size(src)
+
+      FileUtils.cp(src, dest)
+      copied += 1
+    end
+  end
+  UI.message("Harmony: filled #{copied} missing plugin flutter.har path(s)") if copied.positive?
+
+  ohpm = [
+    "/Applications/DevEco-Studio.app/Contents/tools/ohpm/bin/ohpm",
+    (ENV["OHPM_HOME"].to_s.empty? ? nil : File.join(ENV["OHPM_HOME"], "bin/ohpm")),
+    "ohpm"
+  ].compact.find { |p| p == "ohpm" || File.executable?(p) }
+  UI.user_error!("ohpm not found (DevEco tools/ohpm)") if ohpm.nil? || (ohpm != "ohpm" && !File.executable?(ohpm))
+
+  Dir.chdir(ohos) do
+    UI.message("Harmony: ohpm install --all")
+    sh(ohpm, "install", "--all")
   end
 end
 

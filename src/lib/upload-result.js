@@ -108,6 +108,11 @@ function noteBlock(updateDescription) {
     </section>`;
 }
 
+function productBlock(product) {
+  if (!product) return "";
+  return `<p class="product-badge">上架包 PRODUCT · TF_NET_PRODUCT=true（隐藏测试球 · 锁正式环境）</p>`;
+}
+
 function sharedStyles() {
   return `
     :root {
@@ -219,6 +224,17 @@ function sharedStyles() {
       color: var(--muted);
       font-size: 0.82rem;
     }
+    .product-badge {
+      margin: 0.65rem 0 0;
+      padding: 0.45rem 0.55rem;
+      border-left: 3px solid var(--tape);
+      background: #fff4ed;
+      color: #9a3412;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 500;
+      line-height: 1.35;
+    }
     .grid {
       display: grid;
       gap: 0.85rem;
@@ -229,7 +245,7 @@ function sharedStyles() {
   `;
 }
 
-function singleCardInner(item) {
+function singleCardInner(item, product = false) {
   const platform = platformLabel(item.platform);
   const mode = modeLabel(item.mode);
   const qr = String(item.buildQRCodeURL || "").trim();
@@ -238,7 +254,10 @@ function singleCardInner(item) {
   const version = [item.buildVersion, item.buildVersionNo]
     .filter(Boolean)
     .join(" / ");
-  const title = `${platform} · ${mode}`;
+  const title = product ? `${platform} · ${mode} · PRODUCT` : `${platform} · ${mode}`;
+  const eyebrow = product
+    ? "上传成功 · 扫码安装 · 上架包 PRODUCT"
+    : "上传成功 · 扫码安装";
   const qrBlock = qr
     ? `<img class="qr" src="${escapeAttr(qr)}" alt="${escapeAttr(title)} 二维码" />`
     : `<p class="muted">未返回二维码地址</p>`;
@@ -248,8 +267,9 @@ function singleCardInner(item) {
   return {
     title,
     html: `
-    <p class="eyebrow">上传成功 · 扫码安装</p>
+    <p class="eyebrow">${eyebrow}</p>
     <h1>${escapeHtml(title)}</h1>
+    ${productBlock(product)}
     <dl class="meta">
       <div><dt>平台</dt><dd>${escapeHtml(platform)}</dd></div>
       <div><dt>模式</dt><dd>${escapeHtml(mode)}</dd></div>
@@ -265,10 +285,12 @@ function singleCardInner(item) {
  * @param {Array<object>} [data.uploads]
  * @param {string} [data.updateDescription]
  * @param {string} [data.mergedInstallUrl]
+ * @param {boolean} [data.product]
  */
 function buildQrHtml(data) {
   const note = String(data.updateDescription || "").trim();
   const merged = String(data.mergedInstallUrl || "").trim();
+  const product = Boolean(data.product);
   const uploads = Array.isArray(data.uploads)
     ? data.uploads
     : data.platform
@@ -276,7 +298,10 @@ function buildQrHtml(data) {
       : [];
 
   if (merged) {
-    const title = "合并安装页";
+    const title = product ? "合并安装页 · PRODUCT" : "合并安装页";
+    const eyebrow = product
+      ? "上传成功 · 共用安装页 · 上架包 PRODUCT"
+      : "上传成功 · 共用安装页（按设备类型装对应包）";
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -288,8 +313,9 @@ function buildQrHtml(data) {
 <body>
   <main class="shell">
     <section class="card">
-      <p class="eyebrow">上传成功 · 共用安装页（按设备类型装对应包）</p>
+      <p class="eyebrow">${eyebrow}</p>
       <h1>${escapeHtml(title)}</h1>
+      ${productBlock(product)}
       ${noteBlock(note)}
       <p class="app">扫码或打开下方链接；Android / iOS / Harmony 设备会看到对应包。</p>
       <div class="qr-wrap">
@@ -305,7 +331,7 @@ function buildQrHtml(data) {
 
   if (uploads.length <= 1) {
     const item = uploads[0] || data;
-    const { title, html } = singleCardInner(item);
+    const { title, html } = singleCardInner(item, product);
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -328,24 +354,30 @@ function buildQrHtml(data) {
 
   const cards = uploads
     .map((item) => {
-      const { html } = singleCardInner(item);
+      const { html } = singleCardInner(item, product);
       return `<section class="card">${html}</section>`;
     })
     .join("\n");
+
+  const multiTitle = product ? "多平台安装 · PRODUCT" : "多平台安装";
+  const multiEyebrow = product
+    ? "上传成功 · 同窗多卡 · 上架包 PRODUCT"
+    : "上传成功 · 同窗多卡";
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>多平台安装二维码</title>
+  <title>${escapeHtml(multiTitle)}二维码</title>
   <style>${sharedStyles()}</style>
 </head>
 <body>
   <main class="shell">
     <section class="card">
-      <p class="eyebrow">上传成功 · 同窗多卡</p>
-      <h1>多平台安装</h1>
+      <p class="eyebrow">${multiEyebrow}</p>
+      <h1>${escapeHtml(multiTitle)}</h1>
+      ${productBlock(product)}
       ${noteBlock(note)}
     </section>
     <div class="grid">
@@ -371,7 +403,7 @@ function normalizeUploadItem(data) {
 
 /**
  * Persist last upload batch and regenerate QR HTML.
- * Accepts either a single upload fields object or { uploads, updateDescription, mergedInstallUrl }.
+ * Accepts either a single upload fields object or { uploads, updateDescription, mergedInstallUrl, product }.
  */
 function writeLastUpload(packRoot, data) {
   const artifactsDir = path.join(packRoot, "artifacts");
@@ -381,6 +413,7 @@ function writeLastUpload(packRoot, data) {
     data.updateDescription || data.buildUpdateDescription || ""
   ).trim();
   const mergedInstallUrl = String(data.mergedInstallUrl || "").trim();
+  const product = Boolean(data.product);
   const uploads = Array.isArray(data.uploads)
     ? data.uploads.map(normalizeUploadItem)
     : data.platform
@@ -392,6 +425,7 @@ function writeLastUpload(packRoot, data) {
     ...primary,
     updateDescription,
     mergedInstallUrl,
+    product,
     uploads,
     updatedAt: new Date().toISOString(),
   };

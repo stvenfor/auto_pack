@@ -70,66 +70,84 @@
 
         <main class="work">
           <section class="control-strip" aria-label="打包目标与操作">
-            <div class="target-list" id="target-list" role="group" aria-label="平台与模式">
-              <label class="target-row-pick">
-                <input type="checkbox" data-platform="android" checked />
-                <span class="target-platform">Android</span>
-                <select data-mode-for="android" aria-label="Android 模式">
-                  <option value="debug">debug</option>
-                  <option value="release">release</option>
-                </select>
+            <div class="strip-block" aria-labelledby="strip-targets-title">
+              <h2 class="strip-title" id="strip-targets-title">目标选择</h2>
+              <div class="target-list" id="target-list" role="group" aria-label="平台与模式">
+                <label class="target-row-pick">
+                  <input type="checkbox" data-platform="android" checked />
+                  <span class="target-platform">Android</span>
+                  <select data-mode-for="android" aria-label="Android 模式">
+                    <option value="debug">debug</option>
+                    <option value="release">release</option>
+                  </select>
+                </label>
+                <label class="target-row-pick">
+                  <input type="checkbox" data-platform="ios" />
+                  <span class="target-platform">iOS</span>
+                  <select data-mode-for="ios" aria-label="iOS 模式">
+                    <option value="debug">debug</option>
+                    <option value="release">release</option>
+                  </select>
+                </label>
+                <label class="target-row-pick">
+                  <input type="checkbox" data-platform="harmony" />
+                  <span class="target-platform">Harmony</span>
+                  <select data-mode-for="harmony" aria-label="Harmony 模式">
+                    <option value="debug">debug</option>
+                    <option value="release">release (.app)</option>
+                    <option value="profile">profile (hap)</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="strip-block pack-options" aria-labelledby="strip-options-title">
+              <h2 class="strip-title" id="strip-options-title">打包选项</h2>
+              <label class="pack-product">
+                <input type="checkbox" id="pack-product" />
+                <span class="pack-product-text">
+                  <span class="pack-product-name">上架包（TF_NET_PRODUCT）</span>
+                  <span class="pack-product-desc"
+                    >隐藏测试球并锁正式环境；所有 mode 可用，默认不勾</span
+                  >
+                </span>
               </label>
-              <label class="target-row-pick">
-                <input type="checkbox" data-platform="ios" />
-                <span class="target-platform">iOS</span>
-                <select data-mode-for="ios" aria-label="iOS 模式">
-                  <option value="debug">debug</option>
-                  <option value="release">release</option>
-                </select>
-              </label>
-              <label class="target-row-pick">
-                <input type="checkbox" data-platform="harmony" />
-                <span class="target-platform">Harmony</span>
-                <select data-mode-for="harmony" aria-label="Harmony 模式">
-                  <option value="debug">debug</option>
-                  <option value="release">release (.app)</option>
-                  <option value="profile">profile (hap)</option>
-                </select>
+              <label class="field field-note">
+                <span class="field-label"
+                  >安装说明 <span class="optional">可选 · 蒲公英更新说明</span></span
+                >
+                <textarea
+                  id="update-description"
+                  rows="1"
+                  maxlength="500"
+                  placeholder="本次构建/上传的更新说明，留空则用默认文案"
+                ></textarea>
               </label>
             </div>
 
-            <label class="field field-note">
-              <span class="field-label"
-                >安装说明 <span class="optional">可选 · 蒲公英更新说明</span></span
-              >
-              <textarea
-                id="update-description"
-                rows="1"
-                maxlength="500"
-                placeholder="本次构建/上传的更新说明，留空则用默认文案"
-              ></textarea>
-            </label>
-
-            <div class="lanes" role="group">
-              <button type="button" data-lane="build" id="btn-build">
-                <span class="lane-name">构建</span>
-                <span class="lane-id">build</span>
-              </button>
-              <button type="button" data-lane="upload_pgyer" id="btn-upload">
-                <span class="lane-name">上传</span>
-                <span class="lane-id">upload_pgyer</span>
-              </button>
-              <button
-                type="button"
-                class="primary"
-                data-lane="distribute"
-                id="btn-distribute"
-              >
-                <span class="lane-name">构建并上传</span>
-                <span class="lane-id">distribute</span>
-              </button>
+            <div class="strip-block strip-actions" aria-labelledby="strip-actions-title">
+              <h2 class="strip-title" id="strip-actions-title">操作</h2>
+              <div class="lanes" role="group">
+                <button type="button" data-lane="build" id="btn-build">
+                  <span class="lane-name">构建</span>
+                  <span class="lane-id">build</span>
+                </button>
+                <button type="button" data-lane="upload_pgyer" id="btn-upload">
+                  <span class="lane-name">上传</span>
+                  <span class="lane-id">upload_pgyer</span>
+                </button>
+                <button
+                  type="button"
+                  class="primary"
+                  data-lane="distribute"
+                  id="btn-distribute"
+                >
+                  <span class="lane-name">构建并上传</span>
+                  <span class="lane-id">distribute</span>
+                </button>
+              </div>
+              <p class="hint action-hint" id="action-hint"></p>
             </div>
-            <p class="hint action-hint" id="action-hint"></p>
           </section>
 
           <section class="runs-panel" aria-label="运行日志">

@@ -370,7 +370,7 @@ textarea:focus-visible {
 .control-strip {
   flex-shrink: 0;
   display: grid;
-  gap: 0.55rem;
+  gap: 0.75rem;
   padding: 0.7rem 0.85rem;
   background:
     linear-gradient(
@@ -381,6 +381,75 @@ textarea:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: 0 1px 0 color-mix(in srgb, #fff 80%, transparent);
+}
+
+.strip-block {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.strip-block + .strip-block {
+  padding-top: 0.65rem;
+  border-top: 1px dashed color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.strip-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pack-options {
+  gap: 0.5rem;
+}
+
+.pack-product {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  cursor: pointer;
+}
+
+.pack-product:has(input:checked) {
+  border-color: color-mix(in srgb, var(--seal) 50%, var(--border));
+  background: color-mix(in srgb, var(--seal) 7%, var(--surface-raised));
+}
+
+.pack-product input[type="checkbox"] {
+  width: 0.95rem;
+  height: 0.95rem;
+  margin-top: 0.15rem;
+  accent-color: var(--seal);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.pack-product-text {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.pack-product-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pack-product-desc {
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.35;
 }
 
 .target-list {

@@ -8,13 +8,13 @@ Accepted
 
 Console originally forced one Platform × Mode per Run via dropdowns. Users need to pack several platforms in one click, each with its own Mode, share one Install Note, and prefer a single install QR when Pgyer has a merged install page. Pgyer’s upload API still returns per-build QR URLs; a true shared QR only exists after manual「应用合并」in the Pgyer dashboard.
 
-Multi-Target wall-clock time was dominated by sequential `flutter pub get` + per-platform `flutter build`. Naive full-lane parallelism races on App Root (`.dart_tool`, Flutter startup lock, `last-upload.json`).
+Multi-Target wall-clock time was dominated by sequential `flutter pub get` + per-platform `flutter build`. Naive full-lane parallelism races on App Root (`.dart_tool`, Flutter startup lock, `last-upload.json`). Harmony `ohpm install` / hvigor additionally races hard against concurrent Android/iOS builds; cancel-on-first-failure then kills almost-finished sibling builds.
 
 ## Decision
 
 - Replace the Platform dropdown with three selectable rows (android / ios / harmony), each with its own Mode control.
 - One Console action = one composite Run; one log stream with platform prefixes; cancel aborts the batch.
-- **Multi-Target build / distribute:** run Fastlane `prep_deps` once (`flutter pub get`), then **parallel** `build` lanes with `PACK_SKIP_PUB_GET=1`, then **parallel** `upload_pgyer` (each Target writes `artifacts/last-upload-{platform}-{mode}.json`; Node aggregates `last-upload.json` after all settle). Wait for all uploads — keep successes if some fail.
+- **Multi-Target build / distribute:** run Fastlane `prep_deps` once (`flutter pub get`), then build with `PACK_SKIP_PUB_GET=1`: **android + ios in parallel**, **harmony alone afterward**. Peer build failures do **not** cancel siblings; distribute uploads only Targets that built successfully. Then **parallel** `upload_pgyer` (each Target writes `artifacts/last-upload-{platform}-{mode}.json`; Node aggregates `last-upload.json` after all settle). Wait for all uploads — keep successes if some fail.
 - Multi-Target **upload-only** also runs uploads in parallel.
 - Single-Target Runs stay one Fastlane lane (includes its own `pub get`; Fastlane still writes shared `last-upload.json` for CLI `open-qr`).
 - Upload result isolation: Console sets `PACK_UPLOAD_RESULT_PATH` + `PACK_SKIP_SHARED_UPLOAD_RESULT=1` so parallel Fastlane processes do not race the shared JSON.

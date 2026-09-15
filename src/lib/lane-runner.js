@@ -13,6 +13,7 @@ const {
 } = require("./build-env");
 const { readAppRoot } = require("./env");
 const { targetUploadResultPath } = require("./upload-result");
+const { resolveDartDefines } = require("./dart-defines");
 
 const UPLOAD_RESULT_LANES = new Set([
   "upload_pgyer",
@@ -30,6 +31,8 @@ function startLane({
   platform = "android",
   mode = "debug",
   updateDescription = "",
+  product = false,
+  dartDefines = [],
   skipPubGet = false,
   onStdout,
   onStderr,
@@ -37,6 +40,22 @@ function startLane({
 }) {
   const packPlatform = normalizePlatform(platform);
   const packMode = normalizeMode(mode, packPlatform);
+
+  let resolved;
+  try {
+    resolved = resolveDartDefines({
+      product: Boolean(product),
+      defines: Array.isArray(dartDefines) ? dartDefines : [],
+    });
+  } catch (err) {
+    const message = String(err.message || err);
+    onStderr?.(`[auto_pack] ${message}\n`);
+    queueMicrotask(() => onClose?.({ code: 1, signal: null }));
+    return {
+      pid: null,
+      cancel() {},
+    };
+  }
 
   let appRoot =
     (process.env.APP_ROOT || "").trim() ||
@@ -50,6 +69,12 @@ function startLane({
   const env = sanitizeBuildEnv(process.env, { appRoot, flutterRoot });
   env.PACK_PLATFORM = packPlatform;
   env.PACK_MODE = packMode;
+  env.PACK_PRODUCT = resolved.product ? "1" : "0";
+  if (resolved.envValue) {
+    env.PACK_DART_DEFINES = resolved.envValue;
+  } else {
+    delete env.PACK_DART_DEFINES;
+  }
   if (skipPubGet) {
     env.PACK_SKIP_PUB_GET = "1";
   }

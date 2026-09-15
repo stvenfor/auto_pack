@@ -24,6 +24,7 @@ const el = {
   branchSelect: document.getElementById("branch-select"),
   targetList: document.getElementById("target-list"),
   updateDescription: document.getElementById("update-description"),
+  packProduct: document.getElementById("pack-product"),
   btnBuild: document.getElementById("btn-build"),
   btnUpload: document.getElementById("btn-upload"),
   btnDistribute: document.getElementById("btn-distribute"),
@@ -59,13 +60,17 @@ function selectedTargets() {
   return out;
 }
 
+function isProductPack() {
+  return Boolean(el.packProduct?.checked);
+}
+
 function syncTargetHint() {
   const targets = selectedTargets();
   if (!targets.length) {
     el.targetHint.textContent = "未选择平台";
     return;
   }
-  el.targetHint.textContent = targets
+  const names = targets
     .map((t) => {
       const ext = EXT[t.platform]?.[t.mode] || "?";
       const name = `${t.platform}-${t.mode}.${ext}`;
@@ -75,6 +80,31 @@ function syncTargetHint() {
       return name;
     })
     .join(" · ");
+  el.targetHint.textContent = isProductPack() ? `${names} · PRODUCT` : names;
+}
+
+function syncActionHint(data) {
+  const targets = selectedTargets();
+  const onlyHarmonyRelease =
+    targets.length > 0 &&
+    targets.every((t) => t.platform === "harmony" && t.mode === "release");
+
+  let hint = "";
+  if (!targets.length) {
+    hint = "请至少勾选一个平台";
+  } else if (onlyHarmonyRelease && data.canBuild && !data.canUpload) {
+    hint = "所选均为 Harmony release（.app）：可构建，不能上传蒲公英";
+  } else if (!data.canUpload && data.checks && !data.checks.pgyerApiKey) {
+    hint = "未配置蒲公英 Key，无法上传";
+  }
+
+  if (isProductPack()) {
+    const productHint =
+      "上架包 PRODUCT：隐藏测试球并锁正式环境（TF_NET_PRODUCT=true）";
+    hint = hint ? `${productHint} · ${hint}` : productHint;
+  }
+
+  el.actionHint.textContent = hint;
 }
 
 function syncModeEnabled() {
@@ -173,20 +203,7 @@ function renderReadiness(data) {
     (data.canBuild && data.canUpload)
   );
 
-  const targets = selectedTargets();
-  const onlyHarmonyRelease =
-    targets.length > 0 &&
-    targets.every((t) => t.platform === "harmony" && t.mode === "release");
-  if (!targets.length) {
-    el.actionHint.textContent = "请至少勾选一个平台";
-  } else if (onlyHarmonyRelease && data.canBuild && !data.canUpload) {
-    el.actionHint.textContent =
-      "所选均为 Harmony release（.app）：可构建，不能上传蒲公英";
-  } else if (!data.canUpload && data.checks && !data.checks.pgyerApiKey) {
-    el.actionHint.textContent = "未配置蒲公英 Key，无法上传";
-  } else {
-    el.actionHint.textContent = "";
-  }
+  syncActionHint(data);
 }
 
 /** Drop older finished runs so the tab strip only keeps the latest record. */
@@ -292,6 +309,13 @@ el.targetList.addEventListener("change", () => {
   });
 });
 
+el.packProduct?.addEventListener("change", () => {
+  syncTargetHint();
+  if (readiness) {
+    syncActionHint(readiness);
+  }
+});
+
 el.branchSelect.addEventListener("change", async () => {
   if (suppressBranchChange) return;
   const branch = el.branchSelect.value;
@@ -320,6 +344,7 @@ for (const btn of [el.btnBuild, el.btnUpload, el.btnDistribute]) {
       lane,
       targets,
       updateDescription: (el.updateDescription?.value || "").trim(),
+      product: isProductPack(),
     });
     if (!result.ok) {
       el.actionHint.textContent = result.reason || "无法启动 Run";
@@ -335,17 +360,18 @@ el.cancel.addEventListener("click", async () => {
   await loadReadiness();
 });
 
-window.autoPack.onRunStarted(({ id, lane, platform, mode, summary, targets }) => {
+window.autoPack.onRunStarted(({ id, lane, platform, mode, summary, targets, product }) => {
+  const baseSummary =
+    summary ||
+    (Array.isArray(targets)
+      ? targets.map((t) => `${t.platform}/${t.mode}`).join(", ")
+      : "");
   runs.set(id, {
     id,
     lane,
     platform: platform || "android",
     mode: mode || "debug",
-    summary:
-      summary ||
-      (Array.isArray(targets)
-        ? targets.map((t) => `${t.platform}/${t.mode}`).join(", ")
-        : ""),
+    summary: product ? `${baseSummary} · PRODUCT` : baseSummary,
     log: "",
     status: "running",
   });

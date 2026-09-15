@@ -87,6 +87,32 @@ describe("upload-result", () => {
     assert.doesNotMatch(html, /安装说明/);
   });
 
+  it("marks PRODUCT on QR html when product flag is set", () => {
+    const html = buildQrHtml({
+      platform: "android",
+      mode: "release",
+      buildQRCodeURL: "https://example.com/q.png",
+      product: true,
+    });
+    assert.match(html, /PRODUCT/);
+    assert.match(html, /TF_NET_PRODUCT=true/);
+    assert.match(html, /上架包/);
+  });
+
+  it("persists product flag in last-upload.json", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pack-product-"));
+    const { payload } = writeLastUpload(root, {
+      platform: "ios",
+      mode: "release",
+      buildQRCodeURL: "https://example.com/q.png",
+      product: true,
+    });
+    assert.equal(payload.product, true);
+    const saved = readLastUpload(root);
+    assert.equal(saved.product, true);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
   it("builds multi-card html for several uploads", () => {
     const html = buildQrHtml({
       updateDescription: "本周一测",

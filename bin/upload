@@ -7,7 +7,7 @@ source "$ROOT/bin/_pack_args.sh"
 
 if ! parse_pack_args "$@"; then
   status=$?
-  echo "Usage: bin/upload [--platform android|ios|harmony] [--mode debug|release|profile]"
+  echo "Usage: bin/upload [--platform android|ios|harmony] [--mode debug|release|profile] [--product] [--dart-define KEY=value]"
   usage_pack_args
   exit "$status"
 fi
