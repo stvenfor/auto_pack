@@ -1,8 +1,24 @@
 # Auto Pack
 
-本地打包与分发流水线：为 Flutter 应用产出可安装包，并可选上传蒲公英；可用 Console（Electron 桌面壳）或 CLI 操作。
+本地打包与分发流水线：为 Flutter 应用产出可安装包，并可选上传蒲公英；可用桌面 Console、H5 Console 或 CLI 操作。本阶段构建宿主仅为共享的 macOS Build Host（不做 Windows 宿主）。
 
 ## Language
+
+**Build Host**:
+团队共用的、装有 Auto Pack 与签名/工具链的 macOS 机器；本阶段唯一允许执行构建类 Run 的宿主。
+_Avoid_: 构建服务器（易与远端 CI 混淆）、开发者本机（可以就是 Build Host，但口语不区分「谁的电脑」）、Windows 宿主（明确不做）
+
+**Agent**:
+跑在 Build Host 上的本机控制面：经鉴权对外提供与 Console 对等的操作（Readiness、Branch、Run、日志、二维码等）。默认仅本机回环可达；外网访问依赖运维层 Tunnel，不由 Auto Pack 内置。
+_Avoid_: 服务器、后端、API 网关、CI runner
+
+**Access Token**:
+访问 Agent（含经 Tunnel 到达的 H5 Console）的共享口令；知道入口与 Token 即可操作，不做个人账号体系。
+_Avoid_: API Key（易与 `PGYER_API_KEY` 混淆）、密码（口语可以，正式用语用 Access Token）
+
+**Tunnel**:
+运维层把 Build Host 本机端口暴露给外网的通道（例如 cpolar）；不属于 Auto Pack 产品功能，由人在 Build Host 上另行启动与维护。
+_Avoid_: 内置穿透、产品内一键开隧道、VPN（除非团队真用 VPN 替代 Tunnel）
 
 **App Root**:
 被打包的 Flutter 工程根目录。必须通过环境变量或 `auto_pack/.env` 的 `APP_ROOT` 配置（无仓库内默认路径）。
@@ -41,8 +57,12 @@ _Avoid_: 短链接、合并码（口语可以，正式用语 Merged Install Page
 _Avoid_: Electro、electro（历史名）、CI 仓库、pipeline 根目录（`pipeline/` 是容器目录）、Electron（壳框架名，不是产品名）
 
 **Console**:
-Auto Pack 的桌面壳界面：展示 Readiness 与 Run 状态；平台为可勾选行（每行自带 Mode）；填写可选 Install Note；触发构建 / 上传 / 构建并上传。
+操作 Auto Pack 的图形入口总称，含桌面 Console（Electron 壳）与 H5 Console。展示 Readiness 与 Run 状态；平台为可勾选行（每行自带 Mode）；填写可选 Install Note；触发构建 / 上传 / 构建并上传。桌面与 H5 能力基本对等；同一时刻最多一个会改 App Root 的构建类 Run，后来者直接拒绝并提示。
 _Avoid_: Dashboard、GUI 工具、Electron 应用（除非特指技术实现）
+
+**H5 Console**:
+在手机或电脑浏览器中使用的 Console；经 Tunnel 到达 Build Host 上的 Agent，用 Access Token 鉴权。不在浏览器内执行构建。
+_Avoid_: 纯网页工具（暗示无本机引擎）、远端 CI 控制台、小程序
 
 **Readiness**:
 按当前勾选的 Target 评估：App Root、对应 Platform 目录、FVM Flutter、artifacts、Fastlane → canBuild；上传另需蒲公英 Key，且该 Target 须支持蒲公英（Harmony release 除外）。多选时：只要有一个可构建即可点构建；构建并上传时不可上传的 Target（如 Harmony release）只构建、跳过上传并提示。

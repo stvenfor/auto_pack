@@ -1,0 +1,3 @@
+# H5 reaches a local Agent; tunnel stays ops-only
+
+Remote phone/desktop browsers need Console-parity control of packing, but builds still require a shared macOS Build Host (App Root, signing, Fastlane). We expose a local Agent (loopback-only) behind a shared Access Token; operators map that port with an external tunnel (e.g. cpolar). We reject embedding the tunnel in-product, rewriting the engine as remote CI for this need, and shipping a Windows Build Host in the same phase. Phase one keeps Electron on IPC while H5 uses HTTP against shared `src/lib`; both later converge on one HTTP Agent so the two shells do not permanently fork.

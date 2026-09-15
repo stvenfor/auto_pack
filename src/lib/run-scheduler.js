@@ -17,6 +17,7 @@ class RunScheduler {
     if (BUILD_LANES.has(lane) && this._hasActiveBuild()) {
       return {
         ok: false,
+        code: "build_busy",
         reason:
           "A build Run is already active (build / distribute are mutually exclusive).",
       };

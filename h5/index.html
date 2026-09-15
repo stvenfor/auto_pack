@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Auto Pack · H5 Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>Auto Pack</h1>
+      <p class="sub">H5 Console · Build Host Agent</p>
+    </header>
+
+    <section id="auth-panel" class="card">
+      <label for="token">Access Token</label>
+      <input id="token" type="password" autocomplete="off" placeholder="AGENT_ACCESS_TOKEN" />
+      <button id="btn-save-token" type="button">保存并连接</button>
+      <p id="auth-hint" class="hint"></p>
+    </section>
+
+    <main id="main" class="hidden">
+      <section class="card">
+        <h2>Readiness</h2>
+        <p class="mono" id="app-root"></p>
+        <p class="mono muted" id="pack-meta"></p>
+        <p id="branch-line"></p>
+        <p id="action-hint" class="hint"></p>
+        <div id="checks" class="checks"></div>
+      </section>
+
+      <section class="card">
+        <h2>App Root / Branch</h2>
+        <label for="app-root-input">App Root（绝对路径）</label>
+        <div class="row">
+          <input id="app-root-input" type="text" />
+          <button id="btn-set-app-root" type="button">设置</button>
+        </div>
+        <label for="branch-select">Branch</label>
+        <div class="row">
+          <select id="branch-select"></select>
+          <button id="btn-checkout" type="button">切换</button>
+        </div>
+        <p id="branch-hint" class="hint"></p>
+      </section>
+
+      <section class="card">
+        <h2>Targets</h2>
+        <div id="target-list" class="targets"></div>
+        <p id="target-hint" class="hint"></p>
+        <label for="update-description">Install Note（可选）</label>
+        <textarea id="update-description" rows="2" placeholder="蒲公英更新说明"></textarea>
+        <label class="check-line">
+          <input id="pack-product" type="checkbox" />
+          PRODUCT 上架包
+        </label>
+        <div class="actions">
+          <button id="btn-build" type="button">构建</button>
+          <button id="btn-upload" type="button">上传</button>
+          <button id="btn-distribute" type="button">构建并上传</button>
+          <button id="btn-cancel" type="button" class="danger" disabled>取消</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Run 日志</h2>
+        <pre id="log" class="log"></pre>
+      </section>
+
+      <section class="card">
+        <h2>安装结果</h2>
+        <div id="result" class="result"></div>
+        <button id="btn-refresh-result" type="button">刷新结果</button>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

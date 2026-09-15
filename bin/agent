@@ -1,0 +1,66 @@
+#!/usr/bin/env node
+"use strict";
+
+const path = require("node:path");
+const fs = require("node:fs");
+const { ConsoleControl } = require("../src/lib/console-control");
+const { startAgentServer } = require("../src/lib/agent-http");
+
+const PACK_ROOT = path.resolve(__dirname, "..");
+loadDotEnv(path.join(PACK_ROOT, ".env"));
+
+const accessToken = (process.env.AGENT_ACCESS_TOKEN || "").trim();
+if (!accessToken) {
+  console.error(
+    "[agent] AGENT_ACCESS_TOKEN is required (set in environment or auto_pack/.env)"
+  );
+  process.exit(1);
+}
+
+const port = Number(process.env.AGENT_PORT || 8787);
+const host = process.env.AGENT_HOST || "127.0.0.1";
+if (host !== "127.0.0.1" && host !== "localhost") {
+  console.error(
+    `[agent] refusing non-loopback AGENT_HOST=${host} (ADR 0009: loopback only)`
+  );
+  process.exit(1);
+}
+
+const control = new ConsoleControl({ packRoot: PACK_ROOT });
+
+startAgentServer({
+  control,
+  accessToken,
+  staticRoot: path.join(PACK_ROOT, "h5"),
+  host,
+  port,
+}).then((listening) => {
+  const shutdown = () => {
+    control.dispose();
+    listening.close().finally(() => process.exit(0));
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+});
+
+function loadDotEnv(envPath) {
+  if (!fs.existsSync(envPath)) return;
+  const text = fs.readFileSync(envPath, "utf8");
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
