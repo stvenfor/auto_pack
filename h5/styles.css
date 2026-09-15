@@ -84,6 +84,10 @@ select {
   flex: 1;
 }
 
+#pgyer-api-key::placeholder {
+  font-size: 12px;
+}
+
 button {
   border: 0;
   background: var(--accent);

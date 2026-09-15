@@ -3,7 +3,7 @@
 const path = require("node:path");
 const { assessReadiness } = require("./readiness");
 const { gatherProbes, resolveAppRoot } = require("./probe");
-const { writeAppRoot } = require("./env");
+const { writeAppRoot, writePgyerApiKey } = require("./env");
 const { RunScheduler, BUILD_LANES } = require("./run-scheduler");
 const {
   listLocalBranches,
@@ -105,6 +105,21 @@ class ConsoleControl {
     }
     writeAppRoot(path.join(this.packRoot, ".env"), chosen);
     return { ok: true, readiness: this.getReadiness() };
+  }
+
+  /**
+   * Persist PGYER_API_KEY when non-empty. Empty input leaves .env unchanged.
+   * @param {string} apiKey
+   */
+  setPgyerApiKey(apiKey) {
+    const envPath = path.join(this.packRoot, ".env");
+    const result = writePgyerApiKey(envPath, apiKey);
+    return {
+      ok: true,
+      wrote: result.wrote,
+      configured: result.configured,
+      readiness: this.getReadiness(),
+    };
   }
 
   /**

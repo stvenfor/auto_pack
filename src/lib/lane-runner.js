@@ -9,6 +9,7 @@ const {
 const {
   resolveFvmFlutterRoot,
   sanitizeBuildEnv,
+  resolveFastlaneCommand,
   syncAndroidLocalProperties,
 } = require("./build-env");
 const { readAppRoot } = require("./env");
@@ -106,7 +107,7 @@ function startLane({
     }
   }
 
-  const child = spawn("fastlane", ["android", lane], {
+  const child = spawn(resolveFastlaneCommand(env), ["android", lane], {
     cwd: packRoot,
     env,
     shell: false,

@@ -3,6 +3,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const {
+  sanitizeBuildEnv,
+  resolveFastlaneCommand,
+} = require("./build-env");
 const { readAppRoot } = require("./env");
 const { isGitRepo, platformDirExists } = require("./git");
 
@@ -46,9 +50,12 @@ function artifactsWritable(packRoot) {
 }
 
 function fastlaneOk() {
-  const result = spawnSync("fastlane", ["--version"], {
+  const env = sanitizeBuildEnv(process.env);
+  const bin = resolveFastlaneCommand(env);
+  const result = spawnSync(bin, ["--version"], {
     encoding: "utf8",
     timeout: 15_000,
+    env,
   });
   return result.status === 0;
 }

@@ -5,6 +5,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("autoPack", {
   getReadiness: (opts) => ipcRenderer.invoke("readiness:get", opts || {}),
   pickAppRoot: () => ipcRenderer.invoke("appRoot:pick"),
+  setPgyerApiKey: (apiKey) => ipcRenderer.invoke("pgyerKey:set", apiKey),
   checkoutBranch: (branch) => ipcRenderer.invoke("branch:checkout", branch),
   startRun: (payload) => ipcRenderer.invoke("run:start", payload),
   cancelRun: (runId) => ipcRenderer.invoke("run:cancel", runId),

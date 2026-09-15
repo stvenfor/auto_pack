@@ -64,7 +64,21 @@
 
           <div class="rail-foot">
             <button type="button" id="pick-app-root">选择 App Root…</button>
-            <p class="hint" id="key-hint">蒲公英 Key：—</p>
+            <div class="pgyer-key-form">
+              <label class="pgyer-key-label" for="pgyer-api-key"
+                >蒲公英 API Key</label
+              >
+              <div class="pgyer-key-row">
+                <input
+                  id="pgyer-api-key"
+                  type="password"
+                  autocomplete="off"
+                  placeholder="留空不改；填入后保存覆盖"
+                />
+                <button type="button" id="save-pgyer-key">保存</button>
+              </div>
+              <p class="hint" id="key-hint">蒲公英 Key：—</p>
+            </div>
           </div>
         </aside>
 
@@ -78,24 +92,24 @@
                   <span class="target-platform">Android</span>
                   <select data-mode-for="android" aria-label="Android 模式">
                     <option value="debug">debug</option>
-                    <option value="release">release</option>
+                    <option value="release" selected>release</option>
                   </select>
                 </label>
                 <label class="target-row-pick">
-                  <input type="checkbox" data-platform="ios" />
+                  <input type="checkbox" data-platform="ios" checked />
                   <span class="target-platform">iOS</span>
                   <select data-mode-for="ios" aria-label="iOS 模式">
                     <option value="debug">debug</option>
-                    <option value="release">release</option>
+                    <option value="release" selected>release</option>
                   </select>
                 </label>
                 <label class="target-row-pick">
-                  <input type="checkbox" data-platform="harmony" />
+                  <input type="checkbox" data-platform="harmony" checked />
                   <span class="target-platform">Harmony</span>
                   <select data-mode-for="harmony" aria-label="Harmony 模式">
                     <option value="debug">debug</option>
                     <option value="release">release (.app)</option>
-                    <option value="profile">profile (hap)</option>
+                    <option value="profile" selected>profile (hap)</option>
                   </select>
                 </label>
               </div>

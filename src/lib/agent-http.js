@@ -167,6 +167,13 @@ async function handleApi(req, res, url, ctx) {
     return;
   }
 
+  if (method === "PUT" && pathname === "/api/pgyer-api-key") {
+    const body = await readJson(req);
+    const result = control.setPgyerApiKey(body.apiKey ?? body.pgyerApiKey);
+    json(res, 200, result);
+    return;
+  }
+
   if (method === "POST" && pathname === "/api/branch/checkout") {
     const body = await readJson(req);
     const result = control.checkoutBranch(body.branch || body.branchName);

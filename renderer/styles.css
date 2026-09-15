@@ -358,6 +358,40 @@ textarea:focus-visible {
   border-top: 1px dashed color-mix(in srgb, var(--line) 75%, transparent);
 }
 
+.pgyer-key-form {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pgyer-key-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.pgyer-key-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.pgyer-key-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  background: var(--panel, #fff);
+}
+
+.pgyer-key-row input::placeholder {
+  font-size: 12px;
+}
+
+.pgyer-key-row button {
+  white-space: nowrap;
+}
+
 .work {
   display: flex;
   flex-direction: column;

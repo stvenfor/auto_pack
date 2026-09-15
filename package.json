@@ -4,15 +4,75 @@
   "private": true,
   "description": "Auto Pack — local Flutter pack & Pgyer distribute console",
   "main": "electron/main.js",
+  "author": "Auto Pack",
   "scripts": {
     "start": "electron .",
     "agent": "node bin/agent",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "clean:dist": "rm -rf dist",
+    "pack:mac": "npm run clean:dist && CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --mac dir",
+    "dist:mac": "npm run clean:dist && CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --mac dmg zip"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
-    "electron": "^37.2.6"
+    "electron": "^37.2.6",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "local.autopack.console",
+    "productName": "Auto Pack",
+    "copyright": "Copyright © Auto Pack",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "fastlane",
+        "to": "pack/fastlane",
+        "filter": [
+          "**/*",
+          "!report.xml",
+          "!README.md",
+          "!test_output/**"
+        ]
+      },
+      {
+        "from": ".env.example",
+        "to": "pack/.env.example"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
   }
 }

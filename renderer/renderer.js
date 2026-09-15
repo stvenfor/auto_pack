@@ -18,6 +18,8 @@ const el = {
   flutterBin: document.getElementById("flutter-bin"),
   checks: document.getElementById("checks"),
   keyHint: document.getElementById("key-hint"),
+  pgyerApiKey: document.getElementById("pgyer-api-key"),
+  savePgyerKey: document.getElementById("save-pgyer-key"),
   actionHint: document.getElementById("action-hint"),
   targetHint: document.getElementById("target-hint"),
   branchHint: document.getElementById("branch-hint"),
@@ -158,9 +160,9 @@ function renderReadiness(data) {
   el.flutterBin.textContent = data.flutterBin;
   el.keyHint.textContent = data.checks.pgyerApiKey
     ? data.mergedInstallUrlConfigured
-      ? "蒲公英 Key：已配置 · 合并安装页：已配置"
-      : "蒲公英 Key：已配置"
-    : "蒲公英 Key：未配置（请编辑 auto_pack/.env）";
+      ? "状态：已配置 · 合并安装页：已配置（输入框留空则不改 Key）"
+      : "状态：已配置（输入框留空则不改 Key）"
+    : "状态：未配置（填入后点保存写入 .env）";
 
   renderBranchSelect(data);
   syncTargetHint();
@@ -289,6 +291,26 @@ document.getElementById("pick-app-root").addEventListener("click", async () => {
   if (result.ok) {
     await loadReadiness();
   }
+});
+
+el.savePgyerKey?.addEventListener("click", async () => {
+  const value = el.pgyerApiKey?.value ?? "";
+  const result = await window.autoPack.setPgyerApiKey(value);
+  if (!result.ok) {
+    el.keyHint.textContent = result.reason || "保存失败";
+    return;
+  }
+  if (el.pgyerApiKey) el.pgyerApiKey.value = "";
+  if (result.readiness) {
+    renderReadiness(result.readiness);
+  } else {
+    await loadReadiness();
+  }
+  el.keyHint.textContent = result.wrote
+    ? "已写入 .env（新 Key 已覆盖）"
+    : result.configured
+      ? "未改动（输入为空，保留原 Key）"
+      : "仍未配置（请填入 Key 后保存）";
 });
 
 for (const btn of document.querySelectorAll(".log-filter-btn")) {

@@ -3,6 +3,10 @@
 vendor/
 .bundle/
 node_modules/
+dist/
+build/
+*.dmg
+*.blockmap
 artifacts/*
 !artifacts/.gitkeep
 tmp/

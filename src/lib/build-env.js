@@ -98,6 +98,33 @@ function sanitizeBuildEnv(baseEnv, opts = {}) {
 }
 
 /**
+ * Resolve an absolute fastlane binary, preferring Homebrew on GUI-launched apps.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string}
+ */
+function resolveFastlaneCommand(env = process.env) {
+  const candidates = [];
+  for (const dir of String(env.PATH || "")
+    .split(path.delimiter)
+    .filter(Boolean)) {
+    candidates.push(path.join(dir, "fastlane"));
+  }
+  candidates.push(
+    "/opt/homebrew/bin/fastlane",
+    "/usr/local/bin/fastlane"
+  );
+  for (const file of candidates) {
+    try {
+      fs.accessSync(file, fs.constants.X_OK);
+      return file;
+    } catch {
+      // try next
+    }
+  }
+  return "fastlane";
+}
+
+/**
  * Keep android/local.properties flutter.sdk aligned with the FVM SDK we invoke.
  * Gradle's compileFlutterBuild* uses this path; a stale value causes release
  * failures that look like "Process 'command …/flutter' finished with non-zero exit value 1".
@@ -136,6 +163,7 @@ function syncAndroidLocalProperties(appRoot, flutterRoot) {
 module.exports = {
   resolveFvmFlutterRoot,
   sanitizeBuildEnv,
+  resolveFastlaneCommand,
   syncAndroidLocalProperties,
   defaultAndroidSdkDir,
   defaultJavaHome,

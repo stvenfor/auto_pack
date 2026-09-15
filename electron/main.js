@@ -4,12 +4,27 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("node:path");
 const { ConsoleControl, UPLOAD_LANES } = require("../src/lib/console-control");
 const {
+  resolvePackRoot,
+  resolveBundlePackRoot,
+  ensurePackRootReady,
+} = require("../src/lib/pack-root");
+const {
   writeLastUpload,
   platformLabel,
   modeLabel,
 } = require("../src/lib/upload-result");
 
-const PACK_ROOT = path.resolve(__dirname, "..");
+const PACK_ROOT = resolvePackRoot({
+  isPackaged: app.isPackaged,
+  userDataPath: app.getPath("userData"),
+  resourcesPath: process.resourcesPath,
+  electronDirname: __dirname,
+});
+ensurePackRootReady(PACK_ROOT, {
+  bundlePackRoot: app.isPackaged
+    ? resolveBundlePackRoot(process.resourcesPath)
+    : undefined,
+});
 
 let mainWindow = null;
 /** @type {BrowserWindow | null} */
@@ -144,6 +159,10 @@ ipcMain.handle("appRoot:pick", async () => {
     return { ok: false, cancelled: true };
   }
   return control.setAppRoot(result.filePaths[0]);
+});
+
+ipcMain.handle("pgyerKey:set", (_event, apiKey) => {
+  return control.setPgyerApiKey(apiKey);
 });
 
 ipcMain.handle("branch:checkout", (_event, branchName) => {

@@ -15,6 +15,9 @@ const el = {
   checks: document.getElementById("checks"),
   appRootInput: document.getElementById("app-root-input"),
   btnSetAppRoot: document.getElementById("btn-set-app-root"),
+  pgyerApiKey: document.getElementById("pgyer-api-key"),
+  btnSavePgyerKey: document.getElementById("btn-save-pgyer-key"),
+  pgyerKeyHint: document.getElementById("pgyer-key-hint"),
   branchSelect: document.getElementById("branch-select"),
   btnCheckout: document.getElementById("btn-checkout"),
   branchHint: document.getElementById("branch-hint"),
@@ -127,10 +130,20 @@ function syncTargetHint() {
 
 function syncActionHint(data) {
   const parts = [productLabel()];
-  if (data?.buildActive) {
+  if (data.buildActive) {
     parts.push("当前有构建类 Run 进行中");
   } else if (data && !data.canBuild && !data.canUpload) {
     parts.push("当前 Target 不可构建/上传，请检查 Readiness");
+  }
+  if (data?.checks) {
+    el.pgyerKeyHint.textContent = data.checks.pgyerApiKey
+      ? "蒲公英 Key：已配置（留空保存则不改）"
+      : "蒲公英 Key：未配置（填入后保存写入 .env）";
+    if (!data.checks.pgyerApiKey) {
+      parts.push("蒲公英 Key 未配置");
+    }
+  } else {
+    el.pgyerKeyHint.textContent = "";
   }
   if (isProductPack()) {
     parts.push("上架包将隐藏测试球并锁正式环境（TF_NET_PRODUCT=true）");
@@ -391,6 +404,20 @@ el.btnSetAppRoot.addEventListener("click", async () => {
   }
   applyReadiness(data.readiness);
   el.branchHint.textContent = "App Root 已更新";
+});
+
+el.btnSavePgyerKey.addEventListener("click", async () => {
+  const { data } = await api("/api/pgyer-api-key", {
+    method: "PUT",
+    body: JSON.stringify({ apiKey: el.pgyerApiKey.value }),
+  });
+  el.pgyerApiKey.value = "";
+  if (data.readiness) applyReadiness(data.readiness);
+  el.pgyerKeyHint.textContent = data.wrote
+    ? "已写入 .env（新 Key 已覆盖）"
+    : data.configured
+      ? "未改动（输入为空，保留原 Key）"
+      : "仍未配置（请填入 Key 后保存）";
 });
 
 el.btnCheckout.addEventListener("click", async () => {
