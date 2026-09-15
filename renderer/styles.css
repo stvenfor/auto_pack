@@ -254,7 +254,7 @@ select:disabled {
 
 textarea {
   width: 100%;
-  min-height: 3.4rem;
+  min-height: 2.4rem;
   resize: vertical;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -370,8 +370,8 @@ textarea:focus-visible {
 .control-strip {
   flex-shrink: 0;
   display: grid;
-  gap: 0.75rem;
-  padding: 0.95rem 1rem;
+  gap: 0.55rem;
+  padding: 0.7rem 0.85rem;
   background:
     linear-gradient(
       135deg,
@@ -384,16 +384,19 @@ textarea:focus-visible {
 }
 
 .target-list {
-  display: grid;
-  gap: 0.45rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 0.35rem;
 }
 
 .target-row-pick {
-  display: grid;
-  grid-template-columns: auto 1fr minmax(7.5rem, 10rem);
-  gap: 0.55rem 0.65rem;
+  display: inline-flex;
   align-items: center;
-  padding: 0.5rem 0.6rem;
+  gap: 0.4rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0.28rem 0.35rem 0.28rem 0.45rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface-raised);
@@ -401,30 +404,37 @@ textarea:focus-visible {
   transition:
     border-color 0.15s var(--ease),
     opacity 0.15s var(--ease),
-    box-shadow 0.15s var(--ease);
+    background-color 0.15s var(--ease);
 }
 
 .target-row-pick:has(input:checked) {
-  border-color: color-mix(in srgb, var(--seal) 45%, var(--border));
-  box-shadow: inset 3px 0 0 var(--seal);
+  border-color: color-mix(in srgb, var(--seal) 50%, var(--border));
+  background: color-mix(in srgb, var(--seal) 7%, var(--surface-raised));
 }
 
 .target-row-pick input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
+  width: 0.9rem;
+  height: 0.9rem;
   accent-color: var(--seal);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .target-platform {
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
+  white-space: nowrap;
 }
 
 .target-row-pick select {
-  min-height: 2.2rem;
-  padding: 0.35rem 2rem 0.35rem 0.55rem;
-  font-size: 0.84rem;
+  width: auto;
+  min-width: 6.5rem;
+  max-width: 9.5rem;
+  min-height: 1.85rem;
+  padding: 0.2rem 1.7rem 0.2rem 0.45rem;
+  font-size: 0.78rem;
+  background-position: calc(100% - 0.55rem) 50%;
+  background-size: 10px 7px;
 }
 
 .target-row-pick:has(input:not(:checked)) {
@@ -445,7 +455,7 @@ textarea:focus-visible {
 .lanes {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.55rem;
+  gap: 0.4rem;
 }
 
 .lanes.lanes-build-only {
@@ -457,21 +467,21 @@ textarea:focus-visible {
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 0.18rem;
+  gap: 0.1rem;
   text-align: left;
-  min-height: 3.75rem;
-  padding: 0.7rem 0.9rem;
+  min-height: 2.65rem;
+  padding: 0.45rem 0.7rem;
 }
 
 .lane-name {
   font-weight: 600;
-  font-size: 0.98rem;
+  font-size: 0.9rem;
   letter-spacing: 0.01em;
 }
 
 .lane-id {
   font-family: var(--mono);
-  font-size: 0.66rem;
+  font-size: 0.62rem;
   opacity: 0.62;
   font-weight: 400;
 }
@@ -507,9 +517,9 @@ textarea:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
-  min-height: 1.85rem;
+  min-height: 1.7rem;
   flex: 1;
-  max-height: 4.2rem;
+  max-height: 2.2rem;
   overflow: auto;
 }
 

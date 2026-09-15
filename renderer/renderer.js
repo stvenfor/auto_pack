@@ -2,6 +2,8 @@
 
 /** @type {Map<string, { id: string, lane: string, platform: string, mode: string, summary?: string, log: string, status: string }>} */
 const runs = new Map();
+/** Keep running runs + only the latest finished one. */
+const MAX_FINISHED_RUNS = 1;
 let activeRunId = null;
 let readiness = null;
 let suppressBranchChange = false;
@@ -187,7 +189,25 @@ function renderReadiness(data) {
   }
 }
 
+/** Drop older finished runs so the tab strip only keeps the latest record. */
+function pruneRuns() {
+  const finished = [...runs.values()].filter((r) => r.status !== "running");
+  const dropCount = Math.max(0, finished.length - MAX_FINISHED_RUNS);
+  if (!dropCount) return;
+
+  const toDrop = new Set(finished.slice(0, dropCount).map((r) => r.id));
+  for (const id of toDrop) {
+    runs.delete(id);
+  }
+
+  if (activeRunId && toDrop.has(activeRunId)) {
+    const remaining = [...runs.keys()];
+    activeRunId = remaining.length ? remaining[remaining.length - 1] : null;
+  }
+}
+
 function renderTabs() {
+  pruneRuns();
   el.runTabs.innerHTML = "";
   for (const run of runs.values()) {
     const btn = document.createElement("button");
