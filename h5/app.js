@@ -27,7 +27,9 @@ const el = {
   btnDistribute: document.getElementById("btn-distribute"),
   btnCancel: document.getElementById("btn-cancel"),
   log: document.getElementById("log"),
+  resultPanel: document.getElementById("result-panel"),
   result: document.getElementById("result"),
+  resultProductHint: document.getElementById("result-product-hint"),
   btnRefreshResult: document.getElementById("btn-refresh-result"),
 };
 
@@ -37,9 +39,13 @@ let activeRunId = null;
 let eventsAbort = null;
 
 const PLATFORMS = [
-  { platform: "android", modes: ["debug", "release"] },
-  { platform: "ios", modes: ["debug", "release"] },
-  { platform: "harmony", modes: ["debug", "profile", "release"] },
+  { platform: "android", modes: ["debug", "release"], defaultMode: "release" },
+  { platform: "ios", modes: ["debug", "release"], defaultMode: "release" },
+  {
+    platform: "harmony",
+    modes: ["debug", "profile", "release"],
+    defaultMode: "profile",
+  },
 ];
 
 function token() {
@@ -68,14 +74,15 @@ function renderTargets() {
     const id = `t-${p.platform}`;
     row.innerHTML = `
       <label class="check-line">
-        <input type="checkbox" id="${id}" data-platform="${p.platform}" ${
-          p.platform === "android" ? "checked" : ""
-        } />
+        <input type="checkbox" id="${id}" data-platform="${p.platform}" checked />
         ${p.platform}
       </label>
       <select data-platform="${p.platform}">
         ${p.modes
-          .map((m) => `<option value="${m}" ${m === "debug" ? "selected" : ""}>${m}</option>`)
+          .map((m) => {
+            const selected = m === p.defaultMode ? "selected" : "";
+            return `<option value="${m}" ${selected}>${m}</option>`;
+          })
           .join("")}
       </select>
     `;
@@ -99,11 +106,46 @@ function selectedTargets() {
   return out;
 }
 
+function isProductPack() {
+  return Boolean(el.packProduct?.checked);
+}
+
+function productLabel() {
+  return isProductPack() ? "当前：PRODUCT 上架包" : "当前：非 PRODUCT（测试包）";
+}
+
 function syncTargetHint() {
   const targets = selectedTargets();
-  el.targetHint.textContent = targets.length
+  const base = targets.length
     ? targets.map((t) => `${t.platform}/${t.mode}`).join(" · ")
     : "未选择平台";
+  el.targetHint.textContent = targets.length
+    ? `${base} · ${isProductPack() ? "PRODUCT" : "非 PRODUCT"}`
+    : base;
+  syncActionHint();
+}
+
+function syncActionHint(data) {
+  const parts = [productLabel()];
+  if (data?.buildActive) {
+    parts.push("当前有构建类 Run 进行中");
+  } else if (data && !data.canBuild && !data.canUpload) {
+    parts.push("当前 Target 不可构建/上传，请检查 Readiness");
+  }
+  if (isProductPack()) {
+    parts.push("上架包将隐藏测试球并锁正式环境（TF_NET_PRODUCT=true）");
+  }
+  el.actionHint.textContent = parts.join(" · ");
+}
+
+function hideInstallResult() {
+  el.resultPanel.classList.add("hidden");
+  el.result.innerHTML = "";
+  el.resultProductHint.textContent = "";
+}
+
+function showInstallResult() {
+  el.resultPanel.classList.remove("hidden");
 }
 
 function applyReadiness(data) {
@@ -129,13 +171,8 @@ function applyReadiness(data) {
     div.textContent = `${key}: ${ok ? "ok" : "no"}`;
     el.checks.appendChild(div);
   }
-  if (data.buildActive) {
-    el.actionHint.textContent = "当前有构建类 Run 进行中";
-  } else if (!data.canBuild && !data.canUpload) {
-    el.actionHint.textContent = "当前 Target 不可构建/上传，请检查 Readiness";
-  } else {
-    el.actionHint.textContent = "";
-  }
+  syncTargetHint();
+  syncActionHint(data);
   const busy = Boolean(data.buildActive);
   el.btnBuild.disabled = busy || !data.canBuild;
   el.btnDistribute.disabled = busy || !(data.canDistribute || data.canBuild);
@@ -205,7 +242,14 @@ function handleSseBlock(block) {
   if (eventType === "started" || event.type === "started") {
     activeRunId = event.id;
     el.btnCancel.disabled = false;
-    appendLog(`\n—— Run ${event.id} ${event.lane} ${event.summary || ""} ——\n`);
+    const productTag = event.product ? " · PRODUCT" : " · 非 PRODUCT";
+    appendLog(
+      `\n—— Run ${event.id} ${event.lane} ${event.summary || ""}${productTag} ——\n`
+    );
+    const uploadLanes = new Set(["upload_pgyer", "distribute", "distribute_debug"]);
+    if (uploadLanes.has(event.lane)) {
+      hideInstallResult();
+    }
   } else if (eventType === "log" || event.type === "log") {
     appendLog(event.chunk || "");
   } else if (eventType === "finished" || event.type === "finished") {
@@ -259,9 +303,13 @@ async function startLane(lane) {
 async function refreshResult() {
   const { status, data } = await api("/api/upload-presentation");
   if (status === 404 || !data.ok) {
-    el.result.innerHTML = `<p class="hint">${data.reason || "暂无上传结果"}</p>`;
+    hideInstallResult();
     return;
   }
+  showInstallResult();
+  el.resultProductHint.textContent = data.product
+    ? "本次结果：PRODUCT 上架包"
+    : "本次结果：非 PRODUCT（测试包）";
   const note = data.updateDescription
     ? `<p>Install Note：${escapeHtml(data.updateDescription)}</p>`
     : "";
@@ -310,9 +358,9 @@ async function unlockUi() {
   el.authPanel.classList.add("hidden");
   el.main.classList.remove("hidden");
   el.authHint.textContent = "";
+  hideInstallResult();
   await refreshReadiness();
   await connectEvents();
-  await refreshResult();
 }
 
 el.btnSaveToken.addEventListener("click", async () => {
@@ -370,8 +418,12 @@ el.btnCancel.addEventListener("click", async () => {
   });
 });
 el.btnRefreshResult.addEventListener("click", () => refreshResult());
+el.packProduct.addEventListener("change", () => {
+  syncTargetHint();
+});
 
 renderTargets();
+syncTargetHint();
 
 if (token()) {
   el.token.value = token();

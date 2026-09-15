@@ -14,6 +14,12 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  touch-action: manipulation;
+  -ms-touch-action: manipulation;
+}
+
 body {
   margin: 0;
   font-family: "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
@@ -22,6 +28,7 @@ body {
   min-height: 100vh;
   padding: 16px;
   padding-bottom: 48px;
+  overscroll-behavior: contain;
 }
 
 .top h1 {

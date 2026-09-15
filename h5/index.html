@@ -2,7 +2,10 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <title>Auto Pack · H5 Console</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
@@ -67,8 +70,9 @@
         <pre id="log" class="log"></pre>
       </section>
 
-      <section class="card">
+      <section id="result-panel" class="card hidden">
         <h2>安装结果</h2>
+        <p id="result-product-hint" class="hint"></p>
         <div id="result" class="result"></div>
         <button id="btn-refresh-result" type="button">刷新结果</button>
       </section>
