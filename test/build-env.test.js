@@ -56,6 +56,35 @@ describe("build-env", () => {
     assert.equal(env.BUNDLE_GEMFILE, undefined);
   });
 
+  it("fills UTF-8 locale when GUI env omits LANG", () => {
+    const env = sanitizeBuildEnv({ PATH: "/usr/bin" }, {});
+    assert.match(env.LANG, /utf-?8/i);
+    assert.match(env.LC_ALL, /utf-?8/i);
+  });
+
+  it("preserves an existing UTF-8 LANG", () => {
+    const env = sanitizeBuildEnv(
+      { PATH: "/usr/bin", LANG: "zh_CN.UTF-8" },
+      {}
+    );
+    assert.equal(env.LANG, "zh_CN.UTF-8");
+    assert.equal(env.LC_ALL, "zh_CN.UTF-8");
+  });
+
+  it("keeps explicit Harmony SDK env and mirrors to both keys when one is set", () => {
+    const sdk = path.join(tmp, "fake-deveco-sdk");
+    fs.mkdirSync(sdk, { recursive: true });
+    const env = sanitizeBuildEnv(
+      {
+        PATH: "/usr/bin",
+        DEVECO_SDK_HOME: sdk,
+      },
+      {}
+    );
+    assert.equal(env.DEVECO_SDK_HOME, sdk);
+    assert.equal(env.HOS_SDK_HOME, sdk);
+  });
+
   it("syncs android/local.properties flutter.sdk", () => {
     const appRoot = path.join(tmp, "app");
     const androidDir = path.join(appRoot, "android");

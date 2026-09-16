@@ -35,16 +35,74 @@ function defaultJavaHome() {
   return "";
 }
 
+function isUtf8Locale(value) {
+  return /utf-?8/i.test(String(value || "").trim());
+}
+
+/**
+ * Finder/Dock-launched Electron often has no LANG; Fastlane then warns/fails
+ * with "requires your locale to be set to UTF-8".
+ *
+ * @param {NodeJS.ProcessEnv} env
+ */
+function ensureUtf8Locale(env) {
+  const lang = (env.LANG || "").trim();
+  const lcAll = (env.LC_ALL || "").trim();
+  if (isUtf8Locale(lang) || isUtf8Locale(lcAll)) {
+    if (!isUtf8Locale(lcAll) && isUtf8Locale(lang)) env.LC_ALL = lang;
+    if (!isUtf8Locale(lang) && isUtf8Locale(lcAll)) env.LANG = lcAll;
+    return env;
+  }
+  env.LANG = "en_US.UTF-8";
+  env.LC_ALL = "en_US.UTF-8";
+  return env;
+}
+
+/**
+ * Resolve Harmony / DevEco SDK root for GUI-launched builds.
+ * Flutter OHOS looks at DEVECO_SDK_HOME then HOS_SDK_HOME.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string}
+ */
+function defaultHarmonySdkDir(env = process.env) {
+  for (const key of ["DEVECO_SDK_HOME", "HOS_SDK_HOME"]) {
+    const fromEnv = (env[key] || process.env[key] || "").trim();
+    if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
+  }
+  const candidates = [
+    "/Applications/DevEco-Studio.app/Contents/sdk",
+    path.join(os.homedir(), "Library", "Huawei", "Sdk"),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(dir)) return dir;
+  }
+  return "";
+}
+
+/**
+ * DevEco ships a Node under Contents/tools/node (sibling of sdk/).
+ * @param {string} harmonySdkDir
+ * @returns {string}
+ */
+function defaultNodeHome(harmonySdkDir) {
+  if (!harmonySdkDir) return "";
+  const nodeHome = path.join(path.dirname(harmonySdkDir), "tools", "node");
+  return fs.existsSync(nodeHome) ? nodeHome : "";
+}
+
 /**
  * Build a sanitized env for Fastlane/Flutter so a broken shell FLUTTER_HOME
- * (or missing JAVA_HOME/ANDROID_HOME in GUI-launched Electron) cannot derail
- * Android release Gradle tasks.
+ * (or missing JAVA_HOME/ANDROID_HOME/locale/Harmony SDK in GUI-launched
+ * Electron) cannot derail builds.
  *
  * @param {NodeJS.ProcessEnv} baseEnv
  * @param {{ appRoot?: string, flutterRoot?: string }} [opts]
  */
 function sanitizeBuildEnv(baseEnv, opts = {}) {
   const env = { ...baseEnv };
+  ensureUtf8Locale(env);
+
   const flutterRoot =
     opts.flutterRoot ||
     (opts.appRoot ? resolveFvmFlutterRoot(opts.appRoot) : null);
@@ -66,6 +124,16 @@ function sanitizeBuildEnv(baseEnv, opts = {}) {
     if (!(env.ANDROID_SDK_ROOT || "").trim()) env.ANDROID_SDK_ROOT = androidSdk;
   }
 
+  const harmonySdk = defaultHarmonySdkDir(env);
+  if (harmonySdk) {
+    if (!(env.DEVECO_SDK_HOME || "").trim()) env.DEVECO_SDK_HOME = harmonySdk;
+    if (!(env.HOS_SDK_HOME || "").trim()) env.HOS_SDK_HOME = harmonySdk;
+  }
+  const nodeHome = defaultNodeHome(harmonySdk);
+  if (nodeHome && !(env.NODE_HOME || "").trim()) {
+    env.NODE_HOME = nodeHome;
+  }
+
   // Prefer Homebrew tools when Electron PATH is minimal.
   const brewBin = "/opt/homebrew/bin";
   const pathParts = String(env.PATH || "")
@@ -82,6 +150,17 @@ function sanitizeBuildEnv(baseEnv, opts = {}) {
       .filter(Boolean);
     if (fs.existsSync(javaBin) && !parts.includes(javaBin)) {
       parts.unshift(javaBin);
+      env.PATH = parts.join(path.delimiter);
+    }
+  }
+  if (nodeHome) {
+    const nodeBin = path.join(nodeHome, "bin");
+    const parts = String(env.PATH || "")
+      .split(path.delimiter)
+      .filter(Boolean);
+    const inject = fs.existsSync(nodeBin) ? nodeBin : nodeHome;
+    if (fs.existsSync(inject) && !parts.includes(inject)) {
+      parts.unshift(inject);
       env.PATH = parts.join(path.delimiter);
     }
   }
@@ -167,4 +246,6 @@ module.exports = {
   syncAndroidLocalProperties,
   defaultAndroidSdkDir,
   defaultJavaHome,
+  defaultHarmonySdkDir,
+  ensureUtf8Locale,
 };
