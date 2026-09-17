@@ -32,6 +32,8 @@ function startLane({
   platform = "android",
   mode = "debug",
   updateDescription = "",
+  installType = "",
+  password = "",
   product = false,
   dartDefines = [],
   skipPubGet = false,
@@ -83,6 +85,16 @@ function startLane({
   const note = String(updateDescription || "").trim();
   if (note) {
     env.PGYER_UPDATE_DESCRIPTION = note;
+  }
+
+  // Per-run Pgyer install overrides (Console). Empty password leaves .env for Fastlane.
+  const type = String(installType || "").trim();
+  if (type === "1" || type === "2") {
+    env.PGYER_INSTALL_TYPE = type;
+  }
+  const pass = String(password || "").trim();
+  if (pass) {
+    env.PGYER_PASSWORD = pass;
   }
 
   // Console owns last-upload.json aggregation; Fastlane writes per-Target files only.

@@ -25,6 +25,9 @@ const el = {
   targetHint: document.getElementById("target-hint"),
   updateDescription: document.getElementById("update-description"),
   packProduct: document.getElementById("pack-product"),
+  passwordInstall: document.getElementById("pgyer-password-install"),
+  passwordInput: document.getElementById("pgyer-password"),
+  passwordHint: document.getElementById("pgyer-password-hint"),
   btnBuild: document.getElementById("btn-build"),
   btnUpload: document.getElementById("btn-upload"),
   btnDistribute: document.getElementById("btn-distribute"),
@@ -40,6 +43,10 @@ const el = {
 let activeRunId = null;
 /** @type {AbortController | null} */
 let eventsAbort = null;
+/** @type {object | null} */
+let readiness = null;
+/** Session-only password from last successful upload finished event. */
+let sessionInstallPassword = "";
 
 const PLATFORMS = [
   { platform: "android", modes: ["debug", "release"], defaultMode: "release" },
@@ -113,6 +120,39 @@ function isProductPack() {
   return Boolean(el.packProduct?.checked);
 }
 
+function isPasswordInstall() {
+  return Boolean(el.passwordInstall?.checked);
+}
+
+function installTypeForRun() {
+  return isPasswordInstall() ? "2" : "1";
+}
+
+function passwordForRun() {
+  if (!isPasswordInstall()) return "";
+  return (el.passwordInput?.value || "").trim();
+}
+
+function hasEffectivePassword(data) {
+  if (!isPasswordInstall()) return true;
+  if (passwordForRun()) return true;
+  return Boolean(data?.pgyerPasswordConfigured);
+}
+
+function syncPasswordInstallUi(data) {
+  const passwordOn = isPasswordInstall();
+  if (el.passwordInput) el.passwordInput.disabled = !passwordOn;
+  if (el.passwordHint) {
+    if (!passwordOn) {
+      el.passwordHint.textContent = "公开安装 · 密码无效";
+    } else if (data?.pgyerPasswordConfigured) {
+      el.passwordHint.textContent = "已配置 .env 默认 · 留空则用默认";
+    } else {
+      el.passwordHint.textContent = "未配置 .env 默认 · 请填写或改公开";
+    }
+  }
+}
+
 function productLabel() {
   return isProductPack() ? "当前：PRODUCT 上架包" : "当前：非 PRODUCT（测试包）";
 }
@@ -148,6 +188,9 @@ function syncActionHint(data) {
   if (isProductPack()) {
     parts.push("上架包将隐藏测试球并锁正式环境（TF_NET_PRODUCT=true）");
   }
+  if (data && isPasswordInstall() && !hasEffectivePassword(data)) {
+    parts.push("密码安装无密码：请填写或配置 PGYER_PASSWORD，或改公开");
+  }
   el.actionHint.textContent = parts.join(" · ");
 }
 
@@ -162,6 +205,7 @@ function showInstallResult() {
 }
 
 function applyReadiness(data) {
+  readiness = data;
   el.appRoot.textContent = data.appRoot || "(未配置 App Root)";
   el.appRootInput.value = data.appRoot || "";
   el.packMeta.textContent = `packRoot: ${data.packRoot || ""}`;
@@ -179,17 +223,33 @@ function applyReadiness(data) {
   el.checks.innerHTML = "";
   const checks = data.checks || {};
   for (const [key, ok] of Object.entries(checks)) {
+    if (key === "pgyerPassword") continue;
     const div = document.createElement("div");
     div.className = `check ${ok ? "ok" : "bad"}`;
     div.textContent = `${key}: ${ok ? "ok" : "no"}`;
     el.checks.appendChild(div);
   }
+
+  if (
+    el.passwordInstall &&
+    !el.passwordInstall.dataset.userTouched &&
+    (data.pgyerInstallType === "1" || data.pgyerInstallType === "2")
+  ) {
+    el.passwordInstall.checked = data.pgyerInstallType !== "1";
+  }
+  syncPasswordInstallUi(data);
   syncTargetHint();
   syncActionHint(data);
   const busy = Boolean(data.buildActive);
+  const uploadOk = data.canUpload && hasEffectivePassword(data);
   el.btnBuild.disabled = busy || !data.canBuild;
-  el.btnDistribute.disabled = busy || !(data.canDistribute || data.canBuild);
-  el.btnUpload.disabled = !data.canUpload;
+  el.btnDistribute.disabled =
+    busy ||
+    !(
+      (data.canDistribute || data.canBuild) &&
+      (!data.canUpload || hasEffectivePassword(data))
+    );
+  el.btnUpload.disabled = !uploadOk;
   el.btnCheckout.disabled = busy;
 }
 
@@ -275,6 +335,7 @@ function handleSseBlock(block) {
     }
     refreshReadiness().catch(() => {});
     if (!event.cancelled && event.uploads && event.uploads.length) {
+      sessionInstallPassword = String(event.installPassword || "").trim();
       refreshResult().catch(() => {});
     }
   }
@@ -297,6 +358,8 @@ async function startLane(lane) {
       lane,
       targets,
       updateDescription: el.updateDescription.value.trim(),
+      installType: installTypeForRun(),
+      password: passwordForRun(),
       product: Boolean(el.packProduct.checked),
     }),
   });
@@ -326,9 +389,13 @@ async function refreshResult() {
   const note = data.updateDescription
     ? `<p>Install Note：${escapeHtml(data.updateDescription)}</p>`
     : "";
+  const password = sessionInstallPassword
+    ? `<p>安装密码：<code>${escapeHtml(sessionInstallPassword)}</code></p>`
+    : "";
   if (data.presentation === "merged" && data.mergedInstallUrl) {
     el.result.innerHTML = `
       ${note}
+      ${password}
       <div class="result-card">
         <strong>Merged Install Page</strong>
         <p><a href="${escapeAttr(data.mergedInstallUrl)}" target="_blank" rel="noopener">${escapeHtml(
@@ -339,6 +406,7 @@ async function refreshResult() {
   }
   el.result.innerHTML =
     note +
+    password +
     (data.uploads || [])
       .map((u) => {
         const title = `${u.platform}/${u.mode}`;
@@ -448,9 +516,18 @@ el.btnRefreshResult.addEventListener("click", () => refreshResult());
 el.packProduct.addEventListener("change", () => {
   syncTargetHint();
 });
+el.passwordInstall.addEventListener("change", () => {
+  el.passwordInstall.dataset.userTouched = "1";
+  if (readiness) applyReadiness(readiness);
+  else syncPasswordInstallUi({});
+});
+el.passwordInput.addEventListener("input", () => {
+  if (readiness) applyReadiness(readiness);
+});
 
 renderTargets();
 syncTargetHint();
+syncPasswordInstallUi({});
 
 if (token()) {
   el.token.value = token();

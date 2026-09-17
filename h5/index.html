@@ -68,6 +68,18 @@
           <input id="pack-product" type="checkbox" />
           PRODUCT 上架包
         </label>
+        <label class="check-line">
+          <input id="pgyer-password-install" type="checkbox" checked />
+          密码安装（取消=公开；本次覆盖，不写回 .env）
+        </label>
+        <label for="pgyer-password">安装密码</label>
+        <input
+          id="pgyer-password"
+          type="password"
+          autocomplete="off"
+          placeholder="留空使用 .env 的 PGYER_PASSWORD"
+        />
+        <p id="pgyer-password-hint" class="hint"></p>
         <div class="actions">
           <button id="btn-build" type="button">构建</button>
           <button id="btn-upload" type="button">上传</button>

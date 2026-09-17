@@ -10,6 +10,7 @@ const {
 } = require("../src/lib/pack-root");
 const {
   writeLastUpload,
+  buildQrHtml,
   platformLabel,
   modeLabel,
 } = require("../src/lib/upload-result");
@@ -50,6 +51,7 @@ const control = new ConsoleControl({
           openUploadQrWindow({
             updateDescription: "",
             product: event.product,
+            installPassword: event.installPassword || "",
           });
         } catch (err) {
           send("run:log", {
@@ -80,6 +82,8 @@ function openUploadQrWindow(fallback = {}) {
   const product = Boolean(presentation.product ?? fallback.product ?? false);
   const merged = presentation.mergedInstallUrl || "";
   const uploads = presentation.uploads || [];
+  // Session-only: show on this open; never persist into last-upload.json / disk HTML.
+  const installPassword = String(fallback.installPassword || "").trim();
 
   const { htmlPath, payload } = writeLastUpload(PACK_ROOT, {
     uploads,
@@ -99,11 +103,13 @@ function openUploadQrWindow(fallback = {}) {
     qrWindow.close();
   }
 
+  const multi = uploads.length > 1 && !merged;
   qrWindow = new BrowserWindow({
-    width: uploads.length > 1 && !merged ? 900 : 480,
-    height: 680,
-    minWidth: 360,
-    minHeight: 480,
+    width: multi ? Math.min(320 * uploads.length + 48, 920) : 380,
+    height: multi ? 520 : 560,
+    minWidth: multi ? 520 : 340,
+    minHeight: multi ? 420 : 480,
+    resizable: true,
     title: `${title} — 安装二维码`,
     autoHideMenuBar: true,
     webPreferences: {
@@ -114,7 +120,21 @@ function openUploadQrWindow(fallback = {}) {
   qrWindow.on("closed", () => {
     qrWindow = null;
   });
-  qrWindow.loadFile(htmlPath);
+
+  if (installPassword) {
+    const html = buildQrHtml({
+      uploads,
+      updateDescription: note,
+      mergedInstallUrl: merged,
+      product,
+      installPassword,
+    });
+    qrWindow.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(html)}`
+    );
+  } else {
+    qrWindow.loadFile(htmlPath);
+  }
   return { ok: true, htmlPath, title };
 }
 

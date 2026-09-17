@@ -150,6 +150,34 @@ describe("upload-result", () => {
     assert.match(html, /共用码/);
   });
 
+  it("buildQrHtml can show session password without persisting it", () => {
+    const html = buildQrHtml({
+      platform: "android",
+      mode: "debug",
+      buildQRCodeURL: "https://example.com/q.png",
+      installPassword: "team-pass",
+    });
+    assert.match(html, /安装密码/);
+    assert.match(html, /team-pass/);
+
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pack-pwd-"));
+    writeLastUpload(root, {
+      platform: "android",
+      mode: "debug",
+      buildQRCodeURL: "https://example.com/q.png",
+      installPassword: "should-not-persist",
+    });
+    const saved = readLastUpload(root);
+    assert.equal(saved.installPassword, undefined);
+    const diskHtml = fs.readFileSync(
+      path.join(root, "artifacts", "last-upload-qr.html"),
+      "utf8"
+    );
+    assert.doesNotMatch(diskHtml, /should-not-persist/);
+    assert.doesNotMatch(diskHtml, /安装密码/);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
   it("buildQrHtml escapes content", () => {
     const html = buildQrHtml({
       platform: "ios",

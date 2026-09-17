@@ -18,6 +18,7 @@ const {
   readMergedInstallUrl,
 } = require("./upload-result");
 const { BuildRunLock } = require("./build-run-lock");
+const { resolvePgyerInstall } = require("./pgyer-install");
 
 const UPLOAD_LANES = new Set(["upload_pgyer", "distribute", "distribute_debug"]);
 
@@ -157,6 +158,14 @@ class ConsoleControl {
       typeof payload === "object" && payload
         ? Boolean(payload.product)
         : false;
+    const installTypeRaw =
+      typeof payload === "object" && payload
+        ? String(payload.installType ?? "").trim()
+        : "";
+    const passwordRaw =
+      typeof payload === "object" && payload
+        ? String(payload.password || "").trim()
+        : "";
 
     let targets;
     try {
@@ -179,12 +188,24 @@ class ConsoleControl {
     }
 
     const readiness = this.getReadiness({ targets });
+    const pgyerInstall = resolvePgyerInstall({
+      packRoot: this.packRoot,
+      installType: installTypeRaw,
+      password: passwordRaw,
+    });
 
     if (lane === "upload_pgyer") {
       if (!readiness.canUpload) {
         return {
           ok: false,
           reason: "Upload blocked: no selected Target can upload.",
+        };
+      }
+      if (!pgyerInstall.passwordConfigured) {
+        return {
+          ok: false,
+          reason:
+            "Upload blocked: password install needs a password (fill Console or set PGYER_PASSWORD in .env), or switch to public install.",
         };
       }
     }
@@ -206,6 +227,13 @@ class ConsoleControl {
         return {
           ok: false,
           reason: "Distribute blocked: every selected Target must be buildable.",
+        };
+      }
+      if (readiness.canUpload && !pgyerInstall.passwordConfigured) {
+        return {
+          ok: false,
+          reason:
+            "Distribute blocked: password install needs a password (fill Console or set PGYER_PASSWORD in .env), or switch to public install.",
         };
       }
     }
@@ -251,6 +279,8 @@ class ConsoleControl {
       lane,
       targets,
       updateDescription,
+      installType: pgyerInstall.installType,
+      password: passwordRaw,
       product,
       onLog: (chunk) =>
         this.onEvent({
@@ -262,6 +292,9 @@ class ConsoleControl {
       onTargetStart: () => {},
     });
     this._processes.set(runId, batch);
+
+    const sessionInstallPassword =
+      pgyerInstall.installType === "2" ? pgyerInstall.password : "";
 
     batch.done
       .then((result) => {
@@ -277,6 +310,8 @@ class ConsoleControl {
           cancelled: Boolean(result.cancelled),
           product,
           uploads: result.uploads || [],
+          installType: pgyerInstall.installType,
+          installPassword: sessionInstallPassword,
         });
       })
       .catch((err) => {
@@ -292,6 +327,8 @@ class ConsoleControl {
           cancelled: false,
           product,
           uploads: [],
+          installType: pgyerInstall.installType,
+          installPassword: "",
           reason: String(err && err.message ? err.message : err),
         });
       })

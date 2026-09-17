@@ -93,6 +93,8 @@ function gatherProbes(packRoot) {
     Boolean(appRoot) &&
     fs.existsSync(appRoot) &&
     fs.statSync(appRoot).isDirectory();
+  const { pgyerInstallProbes } = require("./pgyer-install");
+  const install = pgyerInstallProbes(packRoot);
   return {
     appRoot,
     appRootExists,
@@ -108,6 +110,8 @@ function gatherProbes(packRoot) {
     artifactsWritable: artifactsWritable(packRoot),
     fastlaneOk: fastlaneOk(),
     pgyerApiKeyConfigured: pgyerApiKeyConfigured(packRoot),
+    pgyerInstallType: install.pgyerInstallType,
+    pgyerPasswordConfigured: install.pgyerPasswordConfigured,
   };
 }
 

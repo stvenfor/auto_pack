@@ -452,15 +452,25 @@ platform :android do
     if update_description.empty?
       update_description = "Auto Pack #{platform} #{mode} upload #{Time.now.strftime('%Y-%m-%d %H:%M')}"
     end
+
+    # Default password install (2). Public (1) ignores any PGYER_PASSWORD in .env.
+    install_type = ENV.fetch("PGYER_INSTALL_TYPE", "2").to_s.strip
+    install_type = "2" if install_type.empty?
     password = ENV["PGYER_PASSWORD"].to_s.strip
-    password = nil if password.empty?
+    password = nil if password.empty? || install_type != "2"
+    if install_type == "2" && password.nil?
+      UI.user_error!(
+        "PGYER_PASSWORD required when PGYER_INSTALL_TYPE=2 (password install). " \
+        "Set it in auto_pack/.env, or uncheck password install / set PGYER_INSTALL_TYPE=1 for public."
+      )
+    end
 
     result = PgyerUpload.upload!(
       file: file,
       api_key: resolve_pgyer_api_key,
       build_type: PGYER_BUILD_TYPE.fetch(platform),
       update_description: update_description,
-      install_type: ENV.fetch("PGYER_INSTALL_TYPE", "1"),
+      install_type: install_type,
       password: password
     )
 

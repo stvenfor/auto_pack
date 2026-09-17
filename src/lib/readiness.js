@@ -33,6 +33,7 @@ function assessReadiness(probes, opts = {}) {
     artifacts: Boolean(probes.artifactsWritable),
     fastlane: Boolean(probes.fastlaneOk),
     pgyerApiKey: Boolean(probes.pgyerApiKeyConfigured),
+    pgyerPassword: Boolean(probes.pgyerPasswordConfigured),
     git: probes.appRootIsGit === undefined ? true : Boolean(probes.appRootIsGit),
   };
 
@@ -91,6 +92,8 @@ function assessReadiness(probes, opts = {}) {
     platform: first.platform,
     mode: first.mode,
     targets: perTarget,
+    pgyerInstallType: probes.pgyerInstallType === "1" ? "1" : "2",
+    pgyerPasswordConfigured: Boolean(probes.pgyerPasswordConfigured),
   };
 }
 

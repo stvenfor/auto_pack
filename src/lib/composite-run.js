@@ -35,6 +35,8 @@ function startCompositeRun({
   lane,
   targets,
   updateDescription = "",
+  installType = "",
+  password = "",
   product = false,
   dartDefines = [],
   onLog,
@@ -46,6 +48,8 @@ function startCompositeRun({
   const active = new Set();
   const uploads = [];
   const note = String(updateDescription || "").trim();
+  const packInstallType = String(installType || "").trim();
+  const packPassword = String(password || "").trim();
   const packProduct = Boolean(product);
   const packDefines = Array.isArray(dartDefines) ? dartDefines : [];
 
@@ -126,6 +130,8 @@ function startCompositeRun({
       platform: target.platform,
       mode: target.mode,
       updateDescription: note,
+      installType: packInstallType,
+      password: packPassword,
       product: packProduct,
       dartDefines: packDefines,
       skipPubGet: Boolean(opts.skipPubGet),

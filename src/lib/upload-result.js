@@ -108,140 +108,214 @@ function noteBlock(updateDescription) {
     </section>`;
 }
 
+function passwordBlock(installPassword) {
+  const password = String(installPassword || "").trim();
+  if (!password) return "";
+  return `<section class="note password-note">
+      <h2>安装密码</h2>
+      <p class="password-value">${escapeHtml(password)}</p>
+    </section>`;
+}
+
 function productBlock(product) {
   if (!product) return "";
-  return `<p class="product-badge">上架包 PRODUCT · TF_NET_PRODUCT=true（隐藏测试球 · 锁正式环境）</p>`;
+  return `<p class="product-badge">上架包 PRODUCT · TF_NET_PRODUCT=true</p>`;
 }
 
 function sharedStyles() {
   return `
     :root {
-      --ink: #101820;
-      --muted: #5c6e80;
-      --tape: #e85a1a;
-      --paper: #e8eef4;
-      --sans: "IBM Plex Sans", "Helvetica Neue", sans-serif;
-      --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+      --ink: #0b1220;
+      --ink-soft: #243044;
+      --muted: #5a6b7d;
+      --seal: #0f766e;
+      --seal-mid: #14b8a6;
+      --paper: #dce6ef;
+      --surface: #ffffff;
+      --line: #a7b8c9;
+      --sans: "Source Sans 3", "Helvetica Neue", sans-serif;
+      --display: "Archivo Narrow", "Arial Narrow", sans-serif;
       --mono: "IBM Plex Mono", Menlo, monospace;
     }
     * { box-sizing: border-box; }
-    body {
+    html, body {
+      height: 100%;
       margin: 0;
-      min-height: 100vh;
+      overflow: hidden;
+    }
+    body {
       display: grid;
       place-items: center;
-      padding: 1.5rem;
+      padding: 0.65rem;
       font-family: var(--sans);
       color: var(--ink);
       background:
-        radial-gradient(ellipse 700px 400px at 10% 0%, #f7fafc 0%, transparent 55%),
+        radial-gradient(ellipse 520px 280px at 8% 0%, #f4f8fc 0%, transparent 58%),
         var(--paper);
     }
     .shell {
-      width: min(100%, 920px);
+      width: min(100%, 100%);
+      max-height: 100%;
       display: grid;
-      gap: 1rem;
+      gap: 0.45rem;
+      align-content: center;
+      overflow: hidden;
+    }
+    .shell.shell-multi {
+      width: min(100%, 860px);
     }
     .card {
-      background: #fff;
-      border: 1px solid #a8b7c6;
-      border-radius: 8px;
-      padding: 1.35rem 1.4rem 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--ink);
+      border-radius: 0 8px 8px 0;
+      padding: 0.7rem 0.85rem 0.8rem;
+      display: grid;
+      gap: 0.35rem;
+      justify-items: stretch;
     }
     .eyebrow {
-      margin: 0 0 0.35rem;
-      color: var(--muted);
-      font-size: 0.8rem;
-      font-weight: 500;
+      margin: 0;
+      color: var(--seal);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
     }
     h1 {
       margin: 0;
       font-family: var(--display);
-      font-size: 2rem;
+      font-size: 1.35rem;
       font-weight: 700;
       letter-spacing: 0.02em;
-      line-height: 1;
+      line-height: 1.05;
+      text-transform: uppercase;
     }
     h2 {
-      margin: 0 0 0.45rem;
-      font-size: 0.85rem;
+      margin: 0 0 0.2rem;
+      font-size: 0.68rem;
       color: var(--muted);
       font-weight: 600;
     }
     .note {
-      margin-top: 0.9rem;
-      padding: 0.75rem 0.85rem;
-      border-left: 3px solid var(--tape);
-      background: #f7f9fc;
-      border-radius: 0 6px 6px 0;
+      margin: 0;
+      padding: 0.4rem 0.5rem;
+      border-left: 3px solid var(--seal);
+      background: #f3f7fb;
+      border-radius: 0 5px 5px 0;
     }
     .note p {
       margin: 0;
-      font-size: 0.92rem;
-      line-height: 1.5;
+      font-size: 0.78rem;
+      line-height: 1.35;
       white-space: pre-wrap;
+      max-height: 2.7em;
+      overflow: hidden;
+    }
+    .password-note .password-value {
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--ink);
     }
     .meta {
-      margin: 0.85rem 0 0;
-      display: grid;
-      gap: 0.35rem;
-      font-size: 0.92rem;
+      margin: 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.85rem;
+      font-size: 0.78rem;
+    }
+    .meta div {
+      display: flex;
+      align-items: baseline;
+      gap: 0.3rem;
     }
     .meta dt {
+      margin: 0;
       color: var(--muted);
-      font-size: 0.75rem;
+      font-size: 0.68rem;
+      font-weight: 600;
     }
     .meta dd {
       margin: 0;
       font-weight: 600;
+      color: var(--ink-soft);
     }
     .qr-wrap {
-      margin: 1.15rem 0 0;
+      margin: 0.15rem 0 0;
       display: grid;
       place-items: center;
-      padding: 0.85rem;
-      border: 1px dashed #a8b7c6;
+      justify-self: center;
+      padding: 0.45rem;
+      border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
       border-radius: 6px;
-      background: #f7f9fc;
+      background: #f7fafc;
+      width: fit-content;
     }
     .qr {
-      width: min(100%, 240px);
-      height: auto;
+      width: 148px;
+      height: 148px;
+      object-fit: contain;
       display: block;
     }
     .link {
       display: block;
-      margin-top: 0.9rem;
+      margin: 0;
       font-family: var(--mono);
-      font-size: 0.72rem;
-      color: var(--tape);
+      font-size: 0.62rem;
+      color: var(--seal);
       word-break: break-all;
-      line-height: 1.4;
+      line-height: 1.3;
+      max-height: 2.6em;
+      overflow: hidden;
     }
-    .muted { color: var(--muted); margin: 0; }
+    .muted { color: var(--muted); margin: 0; font-size: 0.75rem; }
     .app {
-      margin-top: 0.75rem;
+      margin: 0;
       color: var(--muted);
-      font-size: 0.82rem;
+      font-size: 0.72rem;
+      line-height: 1.3;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .product-badge {
-      margin: 0.65rem 0 0;
-      padding: 0.45rem 0.55rem;
-      border-left: 3px solid var(--tape);
-      background: #fff4ed;
-      color: #9a3412;
+      margin: 0;
+      padding: 0.22rem 0.4rem;
+      border-left: 3px solid var(--seal-mid);
+      background: #ecfdf8;
+      color: #0f766e;
       font-family: var(--mono);
-      font-size: 0.72rem;
-      font-weight: 500;
-      line-height: 1.35;
+      font-size: 0.65rem;
+      font-weight: 600;
+      line-height: 1.3;
+      width: fit-content;
     }
+    .head-card {
+      padding: 0.55rem 0.75rem;
+    }
+    .head-card h1 { font-size: 1.15rem; }
     .grid {
       display: grid;
-      gap: 0.85rem;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 0.45rem;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      align-items: start;
+      overflow: hidden;
     }
-    .grid .card { padding: 1rem 1.05rem 1.15rem; }
-    .grid h1 { font-size: 1.55rem; }
+    .grid .card {
+      padding: 0.55rem 0.6rem 0.65rem;
+      gap: 0.28rem;
+    }
+    .grid h1 { font-size: 1.05rem; }
+    .grid .qr {
+      width: 120px;
+      height: 120px;
+    }
+    .grid .qr-wrap { padding: 0.35rem; }
+    .grid .link {
+      font-size: 0.58rem;
+      max-height: 2.4em;
+    }
   `;
 }
 
@@ -256,7 +330,7 @@ function singleCardInner(item, product = false) {
     .join(" / ");
   const title = product ? `${platform} · ${mode} · PRODUCT` : `${platform} · ${mode}`;
   const eyebrow = product
-    ? "上传成功 · 扫码安装 · 上架包 PRODUCT"
+    ? "上传成功 · 扫码安装 · PRODUCT"
     : "上传成功 · 扫码安装";
   const qrBlock = qr
     ? `<img class="qr" src="${escapeAttr(qr)}" alt="${escapeAttr(title)} 二维码" />`
@@ -286,9 +360,11 @@ function singleCardInner(item, product = false) {
  * @param {string} [data.updateDescription]
  * @param {string} [data.mergedInstallUrl]
  * @param {boolean} [data.product]
+ * @param {string} [data.installPassword] session-only; never persist to last-upload.json
  */
 function buildQrHtml(data) {
   const note = String(data.updateDescription || "").trim();
+  const installPassword = String(data.installPassword || "").trim();
   const merged = String(data.mergedInstallUrl || "").trim();
   const product = Boolean(data.product);
   const uploads = Array.isArray(data.uploads)
@@ -317,9 +393,10 @@ function buildQrHtml(data) {
       <h1>${escapeHtml(title)}</h1>
       ${productBlock(product)}
       ${noteBlock(note)}
-      <p class="app">扫码或打开下方链接；Android / iOS / Harmony 设备会看到对应包。</p>
+      ${passwordBlock(installPassword)}
+      <p class="app">按设备类型展示对应安装包</p>
       <div class="qr-wrap">
-        <img class="qr" src="${escapeAttr(`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(merged)}`)}" alt="合并安装页二维码" />
+        <img class="qr" src="${escapeAttr(`https://api.qrserver.com/v1/create-qr-code/?size=168x168&data=${encodeURIComponent(merged)}`)}" alt="合并安装页二维码" />
       </div>
       <a class="link" href="${escapeAttr(merged)}" target="_blank" rel="noopener">${escapeHtml(merged)}</a>
     </section>
@@ -345,6 +422,7 @@ function buildQrHtml(data) {
     <section class="card">
       ${html}
       ${noteBlock(note)}
+      ${passwordBlock(installPassword)}
     </section>
   </main>
 </body>
@@ -373,12 +451,13 @@ function buildQrHtml(data) {
   <style>${sharedStyles()}</style>
 </head>
 <body>
-  <main class="shell">
-    <section class="card">
+  <main class="shell shell-multi">
+    <section class="card head-card">
       <p class="eyebrow">${multiEyebrow}</p>
       <h1>${escapeHtml(multiTitle)}</h1>
       ${productBlock(product)}
       ${noteBlock(note)}
+      ${passwordBlock(installPassword)}
     </section>
     <div class="grid">
       ${cards}
@@ -404,6 +483,7 @@ function normalizeUploadItem(data) {
 /**
  * Persist last upload batch and regenerate QR HTML.
  * Accepts either a single upload fields object or { uploads, updateDescription, mergedInstallUrl, product }.
+ * installPassword (if passed) is used only for in-memory HTML callers — never written to JSON/HTML on disk here.
  */
 function writeLastUpload(packRoot, data) {
   const artifactsDir = path.join(packRoot, "artifacts");

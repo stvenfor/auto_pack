@@ -27,6 +27,10 @@ const el = {
   targetList: document.getElementById("target-list"),
   updateDescription: document.getElementById("update-description"),
   packProduct: document.getElementById("pack-product"),
+  passwordInstall: document.getElementById("pgyer-password-install"),
+  passwordField: document.getElementById("pgyer-password-field"),
+  passwordInput: document.getElementById("pgyer-password"),
+  passwordHint: document.getElementById("pgyer-password-hint"),
   btnBuild: document.getElementById("btn-build"),
   btnUpload: document.getElementById("btn-upload"),
   btnDistribute: document.getElementById("btn-distribute"),
@@ -66,6 +70,52 @@ function isProductPack() {
   return Boolean(el.packProduct?.checked);
 }
 
+function isPasswordInstall() {
+  return Boolean(el.passwordInstall?.checked);
+}
+
+function installTypeForRun() {
+  return isPasswordInstall() ? "2" : "1";
+}
+
+function passwordForRun() {
+  if (!isPasswordInstall()) return "";
+  return (el.passwordInput?.value || "").trim();
+}
+
+/** Effective password available for upload (UI or .env default). */
+function hasEffectivePassword(data) {
+  if (!isPasswordInstall()) return true;
+  if (passwordForRun()) return true;
+  return Boolean(data?.pgyerPasswordConfigured);
+}
+
+function syncPasswordInstallUi(data) {
+  const passwordOn = isPasswordInstall();
+  if (el.passwordInput) {
+    el.passwordInput.disabled = !passwordOn;
+  }
+  if (el.passwordField) {
+    el.passwordField.classList.toggle("is-disabled", !passwordOn);
+  }
+  if (el.passwordInput) {
+    el.passwordInput.placeholder = passwordOn
+      ? data?.pgyerPasswordConfigured
+        ? "空=用 .env 默认"
+        : "需填写或配置 .env"
+      : "公开安装";
+  }
+  if (el.passwordHint) {
+    if (!passwordOn) {
+      el.passwordHint.textContent = "公开安装 · 密码无效";
+    } else if (data?.pgyerPasswordConfigured) {
+      el.passwordHint.textContent = "已配置 .env 默认 · 留空则用默认";
+    } else {
+      el.passwordHint.textContent = "未配置 .env 默认 · 请填写或改公开";
+    }
+  }
+}
+
 function syncTargetHint() {
   const targets = selectedTargets();
   if (!targets.length) {
@@ -98,6 +148,9 @@ function syncActionHint(data) {
     hint = "所选均为 Harmony release（.app）：可构建，不能上传蒲公英";
   } else if (!data.canUpload && data.checks && !data.checks.pgyerApiKey) {
     hint = "未配置蒲公英 Key，无法上传";
+  } else if (isPasswordInstall() && !hasEffectivePassword(data)) {
+    hint =
+      "密码安装已开启但无密码：请填写或配置 PGYER_PASSWORD，或取消勾选改为公开";
   }
 
   if (isProductPack()) {
@@ -136,7 +189,7 @@ function renderBranchSelect(data) {
     el.branchSelect.disabled = true;
     el.branchHint.textContent = data.appRootIsGit
       ? ""
-      : "App Root 不是 git 仓库，无法切分支";
+      : "非 git，不可切分支";
   } else {
     for (const name of branches) {
       const opt = document.createElement("option");
@@ -147,8 +200,8 @@ function renderBranchSelect(data) {
     }
     el.branchSelect.disabled = Boolean(data.buildActive);
     el.branchHint.textContent = data.buildActive
-      ? "构建进行中，暂不可切分支"
-      : "选择后立刻 checkout（工作区须干净）";
+      ? "构建中，暂不可切分支"
+      : "";
   }
   suppressBranchChange = false;
 }
@@ -156,26 +209,39 @@ function renderBranchSelect(data) {
 function renderReadiness(data) {
   readiness = data;
   el.appRoot.textContent = data.appRoot;
+  el.appRoot.title = data.appRoot || "";
   el.packRoot.textContent = data.packRoot;
+  el.packRoot.title = data.packRoot || "";
   el.flutterBin.textContent = data.flutterBin;
+  el.flutterBin.title = data.flutterBin || "";
   el.keyHint.textContent = data.checks.pgyerApiKey
     ? data.mergedInstallUrlConfigured
-      ? "状态：已配置 · 合并安装页：已配置（输入框留空则不改 Key）"
-      : "状态：已配置（输入框留空则不改 Key）"
-    : "状态：未配置（填入后点保存写入 .env）";
+      ? "Key 已配 · 合并页已配"
+      : "Key 已配（空保存不改）"
+    : "Key 未配";
+
+  // Initial checkbox follows .env default (until user toggles this session).
+  if (
+    el.passwordInstall &&
+    !el.passwordInstall.dataset.userTouched &&
+    (data.pgyerInstallType === "1" || data.pgyerInstallType === "2")
+  ) {
+    el.passwordInstall.checked = data.pgyerInstallType !== "1";
+  }
 
   renderBranchSelect(data);
   syncTargetHint();
   syncModeEnabled();
+  syncPasswordInstallUi(data);
 
   const labels = {
     appRoot: "App Root",
-    flutter: "Flutter (FVM)",
-    artifacts: "artifacts 可写",
+    flutter: "Flutter",
+    artifacts: "artifacts",
     fastlane: "Fastlane",
     pgyerApiKey: "蒲公英 Key",
-    platformDir: "所选平台目录",
-    git: "Git 仓库",
+    platformDir: "平台目录",
+    git: "Git",
   };
 
   el.checks.innerHTML = "";
@@ -184,7 +250,12 @@ function renderReadiness(data) {
     const li = document.createElement("li");
     const ok = data.checks[key];
     li.className = ok ? "ok" : "bad";
-    li.textContent = `${ok ? "通过" : "未通过"} · ${label}`;
+    li.title = ok ? `通过 · ${label}` : `未通过 · ${label}`;
+    const dot = document.createElement("span");
+    dot.className = "check-dot";
+    dot.setAttribute("aria-hidden", "true");
+    li.appendChild(dot);
+    li.appendChild(document.createTextNode(label));
     el.checks.appendChild(li);
   }
 
@@ -193,16 +264,23 @@ function renderReadiness(data) {
       const li = document.createElement("li");
       const uploadNote = t.canUpload ? "可上传" : "仅构建";
       li.className = t.canBuild ? "ok" : "bad";
-      li.textContent = `${t.canBuild ? "就绪" : "不可用"} · ${t.platform}/${t.mode}（${uploadNote}）`;
+      const label = `${t.platform}/${t.mode}`;
+      li.title = `${t.canBuild ? "就绪" : "不可用"} · ${label}（${uploadNote}）`;
+      const dot = document.createElement("span");
+      dot.className = "check-dot";
+      dot.setAttribute("aria-hidden", "true");
+      li.appendChild(dot);
+      li.appendChild(document.createTextNode(`${label} · ${uploadNote}`));
       el.checks.appendChild(li);
     }
   }
 
+  const uploadOk = data.canUpload && hasEffectivePassword(data);
   el.btnBuild.disabled = !data.canBuild;
-  el.btnUpload.disabled = !data.canUpload;
+  el.btnUpload.disabled = !uploadOk;
   el.btnDistribute.disabled = !(
-    data.canDistribute ||
-    (data.canBuild && data.canUpload)
+    (data.canDistribute || (data.canBuild && data.canUpload)) &&
+    (!data.canUpload || hasEffectivePassword(data))
   );
 
   syncActionHint(data);
@@ -307,10 +385,10 @@ el.savePgyerKey?.addEventListener("click", async () => {
     await loadReadiness();
   }
   el.keyHint.textContent = result.wrote
-    ? "已写入 .env（新 Key 已覆盖）"
+    ? "已写入 .env"
     : result.configured
-      ? "未改动（输入为空，保留原 Key）"
-      : "仍未配置（请填入 Key 后保存）";
+      ? "未改动（输入为空）"
+      : "仍未配置";
 });
 
 for (const btn of document.querySelectorAll(".log-filter-btn")) {
@@ -335,6 +413,20 @@ el.packProduct?.addEventListener("change", () => {
   syncTargetHint();
   if (readiness) {
     syncActionHint(readiness);
+  }
+});
+
+el.passwordInstall?.addEventListener("change", () => {
+  if (el.passwordInstall) el.passwordInstall.dataset.userTouched = "1";
+  syncPasswordInstallUi(readiness || {});
+  if (readiness) {
+    renderReadiness(readiness);
+  }
+});
+
+el.passwordInput?.addEventListener("input", () => {
+  if (readiness) {
+    renderReadiness(readiness);
   }
 });
 
@@ -366,6 +458,8 @@ for (const btn of [el.btnBuild, el.btnUpload, el.btnDistribute]) {
       lane,
       targets,
       updateDescription: (el.updateDescription?.value || "").trim(),
+      installType: installTypeForRun(),
+      password: passwordForRun(),
       product: isProductPack(),
     });
     if (!result.ok) {
