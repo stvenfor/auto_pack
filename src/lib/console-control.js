@@ -385,6 +385,7 @@ class ConsoleControl {
       mergedInstallUrl: merged,
       updateDescription: note,
       product: Boolean(saved.product),
+      updatedAt: saved.updatedAt || "",
       uploads,
     };
   }

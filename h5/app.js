@@ -392,8 +392,12 @@ async function refreshResult() {
   const password = sessionInstallPassword
     ? `<p>安装密码：<code>${escapeHtml(sessionInstallPassword)}</code></p>`
     : "";
+  const stamp = data.updatedAt
+    ? `<p class="hint">上传时间 ${escapeHtml(formatUploadTimeLocal(data.updatedAt))}</p>`
+    : "";
   if (data.presentation === "merged" && data.mergedInstallUrl) {
     el.result.innerHTML = `
+      ${stamp}
       ${note}
       ${password}
       <div class="result-card">
@@ -405,6 +409,7 @@ async function refreshResult() {
     return;
   }
   el.result.innerHTML =
+    stamp +
     note +
     password +
     (data.uploads || [])
@@ -421,6 +426,14 @@ async function refreshResult() {
         return `<div class="result-card"><strong>${escapeHtml(title)}</strong>${qr}${link}</div>`;
       })
       .join("");
+}
+
+function formatUploadTimeLocal(value) {
+  const raw = String(value || "").trim();
+  const date = raw ? new Date(raw) : new Date();
+  const safe = Number.isNaN(date.getTime()) ? new Date() : date;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${safe.getFullYear()}-${pad(safe.getMonth() + 1)}-${pad(safe.getDate())} ${pad(safe.getHours())}:${pad(safe.getMinutes())}`;
 }
 
 function escapeHtml(value) {

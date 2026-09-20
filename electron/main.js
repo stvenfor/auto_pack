@@ -128,6 +128,7 @@ function openUploadQrWindow(fallback = {}) {
       mergedInstallUrl: merged,
       product,
       installPassword,
+      updatedAt: payload.updatedAt,
     });
     qrWindow.loadURL(
       `data:text/html;charset=utf-8,${encodeURIComponent(html)}`

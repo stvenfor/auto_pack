@@ -178,6 +178,17 @@ describe("upload-result", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
+  it("shows local upload time on QR html", () => {
+    const html = buildQrHtml({
+      platform: "android",
+      mode: "debug",
+      buildQRCodeURL: "https://example.com/q.png",
+      updatedAt: "2026-09-20T08:10:00.000Z",
+    });
+    assert.match(html, /上传时间/);
+    assert.match(html, /2026-09-20/);
+  });
+
   it("buildQrHtml escapes content", () => {
     const html = buildQrHtml({
       platform: "ios",

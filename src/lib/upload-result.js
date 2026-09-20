@@ -122,6 +122,23 @@ function productBlock(product) {
   return `<p class="product-badge">上架包 PRODUCT · TF_NET_PRODUCT=true</p>`;
 }
 
+/**
+ * Format an ISO timestamp for display in local time (YYYY-MM-DD HH:mm).
+ * @param {string} [value]
+ */
+function formatUploadTime(value) {
+  const raw = String(value || "").trim();
+  const date = raw ? new Date(raw) : new Date();
+  const safe = Number.isNaN(date.getTime()) ? new Date() : date;
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${safe.getFullYear()}-${pad(safe.getMonth() + 1)}-${pad(safe.getDate())} ${pad(safe.getHours())}:${pad(safe.getMinutes())}`;
+}
+
+function timeBlock(updatedAt) {
+  const label = formatUploadTime(updatedAt);
+  return `<p class="stamp">上传时间 ${escapeHtml(label)}</p>`;
+}
+
 function sharedStyles() {
   return `
     :root {
@@ -180,6 +197,13 @@ function sharedStyles() {
       font-size: 0.68rem;
       font-weight: 600;
       letter-spacing: 0.04em;
+    }
+    .stamp {
+      margin: 0;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.01em;
     }
     h1 {
       margin: 0;
@@ -360,6 +384,7 @@ function singleCardInner(item, product = false) {
  * @param {string} [data.updateDescription]
  * @param {string} [data.mergedInstallUrl]
  * @param {boolean} [data.product]
+ * @param {string} [data.updatedAt]
  * @param {string} [data.installPassword] session-only; never persist to last-upload.json
  */
 function buildQrHtml(data) {
@@ -367,6 +392,8 @@ function buildQrHtml(data) {
   const installPassword = String(data.installPassword || "").trim();
   const merged = String(data.mergedInstallUrl || "").trim();
   const product = Boolean(data.product);
+  const updatedAt = String(data.updatedAt || "").trim() || new Date().toISOString();
+  const stamp = timeBlock(updatedAt);
   const uploads = Array.isArray(data.uploads)
     ? data.uploads
     : data.platform
@@ -391,6 +418,7 @@ function buildQrHtml(data) {
     <section class="card">
       <p class="eyebrow">${eyebrow}</p>
       <h1>${escapeHtml(title)}</h1>
+      ${stamp}
       ${productBlock(product)}
       ${noteBlock(note)}
       ${passwordBlock(installPassword)}
@@ -421,6 +449,7 @@ function buildQrHtml(data) {
   <main class="shell">
     <section class="card">
       ${html}
+      ${stamp}
       ${noteBlock(note)}
       ${passwordBlock(installPassword)}
     </section>
@@ -455,6 +484,7 @@ function buildQrHtml(data) {
     <section class="card head-card">
       <p class="eyebrow">${multiEyebrow}</p>
       <h1>${escapeHtml(multiTitle)}</h1>
+      ${stamp}
       ${productBlock(product)}
       ${noteBlock(note)}
       ${passwordBlock(installPassword)}
@@ -531,4 +561,5 @@ module.exports = {
   readMergedInstallUrl,
   buildQrHtml,
   writeLastUpload,
+  formatUploadTime,
 };
