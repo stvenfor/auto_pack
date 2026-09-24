@@ -81,6 +81,17 @@ function defaultHarmonySdkDir(env = process.env) {
 }
 
 /**
+ * DevEco.app Contents/ (parent of sdk/). Matches typical TOOL_HOME in .zshrc.
+ * @param {string} harmonySdkDir
+ * @returns {string}
+ */
+function defaultDevEcoToolHome(harmonySdkDir) {
+  if (!harmonySdkDir) return "";
+  const toolHome = path.dirname(harmonySdkDir);
+  return fs.existsSync(toolHome) ? toolHome : "";
+}
+
+/**
  * DevEco ships a Node under Contents/tools/node (sibling of sdk/).
  * @param {string} harmonySdkDir
  * @returns {string}
@@ -92,9 +103,44 @@ function defaultNodeHome(harmonySdkDir) {
 }
 
 /**
+ * @param {string} toolHome DevEco Contents/
+ * @returns {string[]}
+ */
+function defaultHarmonyToolBins(toolHome) {
+  if (!toolHome) return [];
+  const bins = [
+    path.join(toolHome, "tools", "ohpm", "bin"),
+    path.join(toolHome, "tools", "hvigor", "bin"),
+    path.join(toolHome, "sdk", "default", "openharmony", "toolchains"),
+  ];
+  return bins.filter((dir) => fs.existsSync(dir));
+}
+
+/**
+ * Prepend dirs onto PATH (stable order, no duplicates).
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string[]} dirs newest-first (unshift order)
+ */
+function prependPathDirs(env, dirs) {
+  const parts = String(env.PATH || "")
+    .split(path.delimiter)
+    .filter(Boolean);
+  for (const dir of [...dirs].reverse()) {
+    if (!dir || !fs.existsSync(dir)) continue;
+    const idx = parts.indexOf(dir);
+    if (idx >= 0) parts.splice(idx, 1);
+    parts.unshift(dir);
+  }
+  env.PATH = parts.join(path.delimiter);
+}
+
+/**
  * Build a sanitized env for Fastlane/Flutter so a broken shell FLUTTER_HOME
  * (or missing JAVA_HOME/ANDROID_HOME/locale/Harmony SDK in GUI-launched
  * Electron) cannot derail builds.
+ *
+ * Packaged .app does not load ~/.zshrc — inject the same DevEco tools that
+ * terminal `npm start` inherits (TOOL_HOME, ohpm, hvigor, hdc).
  *
  * @param {NodeJS.ProcessEnv} baseEnv
  * @param {{ appRoot?: string, flutterRoot?: string }} [opts]
@@ -102,6 +148,11 @@ function defaultNodeHome(harmonySdkDir) {
 function sanitizeBuildEnv(baseEnv, opts = {}) {
   const env = { ...baseEnv };
   ensureUtf8Locale(env);
+
+  // Electron parent env can confuse Node-based DevEco tools (ohpm / hvigor).
+  delete env.ELECTRON_RUN_AS_NODE;
+  delete env.ELECTRON_NO_ASAR;
+  delete env.ELECTRON_NO_ATTACH_CONSOLE;
 
   const flutterRoot =
     opts.flutterRoot ||
@@ -129,41 +180,36 @@ function sanitizeBuildEnv(baseEnv, opts = {}) {
     if (!(env.DEVECO_SDK_HOME || "").trim()) env.DEVECO_SDK_HOME = harmonySdk;
     if (!(env.HOS_SDK_HOME || "").trim()) env.HOS_SDK_HOME = harmonySdk;
   }
+  const toolHome = defaultDevEcoToolHome(harmonySdk);
+  if (toolHome && !(env.TOOL_HOME || "").trim()) {
+    env.TOOL_HOME = toolHome;
+  }
+  const ohpmHome = toolHome
+    ? path.join(toolHome, "tools", "ohpm")
+    : "";
+  if (ohpmHome && fs.existsSync(ohpmHome) && !(env.OHPM_HOME || "").trim()) {
+    env.OHPM_HOME = ohpmHome;
+  }
   const nodeHome = defaultNodeHome(harmonySdk);
   if (nodeHome && !(env.NODE_HOME || "").trim()) {
     env.NODE_HOME = nodeHome;
   }
 
-  // Prefer Homebrew tools when Electron PATH is minimal.
+  // Prefer Homebrew + DevEco CLI tools when Electron PATH is minimal
+  // (Finder launch has no ~/.zshrc ohpm/hvigor entries).
   const brewBin = "/opt/homebrew/bin";
-  const pathParts = String(env.PATH || "")
-    .split(path.delimiter)
-    .filter(Boolean);
-  if (fs.existsSync(brewBin) && !pathParts.includes(brewBin)) {
-    pathParts.unshift(brewBin);
-    env.PATH = pathParts.join(path.delimiter);
-  }
+  const pathInject = [];
+  if (fs.existsSync(brewBin)) pathInject.push(brewBin);
   if (javaHome) {
     const javaBin = path.join(javaHome, "bin");
-    const parts = String(env.PATH || "")
-      .split(path.delimiter)
-      .filter(Boolean);
-    if (fs.existsSync(javaBin) && !parts.includes(javaBin)) {
-      parts.unshift(javaBin);
-      env.PATH = parts.join(path.delimiter);
-    }
+    if (fs.existsSync(javaBin)) pathInject.push(javaBin);
   }
   if (nodeHome) {
     const nodeBin = path.join(nodeHome, "bin");
-    const parts = String(env.PATH || "")
-      .split(path.delimiter)
-      .filter(Boolean);
-    const inject = fs.existsSync(nodeBin) ? nodeBin : nodeHome;
-    if (fs.existsSync(inject) && !parts.includes(inject)) {
-      parts.unshift(inject);
-      env.PATH = parts.join(path.delimiter);
-    }
+    pathInject.push(fs.existsSync(nodeBin) ? nodeBin : nodeHome);
   }
+  pathInject.push(...defaultHarmonyToolBins(toolHome));
+  prependPathDirs(env, pathInject);
 
   // Drop Ruby gem isolation vars so CocoaPods is not polluted by a parent
   // shell / Electron / leftover Fastlane GEM_PATH (MissingSpecError: ffi, …).
@@ -247,5 +293,7 @@ module.exports = {
   defaultAndroidSdkDir,
   defaultJavaHome,
   defaultHarmonySdkDir,
+  defaultDevEcoToolHome,
+  defaultHarmonyToolBins,
   ensureUtf8Locale,
 };

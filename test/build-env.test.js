@@ -111,4 +111,29 @@ describe("build-env", () => {
 
     assert.equal(resolveFvmFlutterRoot(appRoot), fs.realpathSync(sdk));
   });
+
+  it("injects DevEco ohpm/hvigor onto PATH for GUI-like env", () => {
+    const toolHome = path.join(tmp, "DevEcoContents");
+    const sdk = path.join(toolHome, "sdk");
+    const ohpmBin = path.join(toolHome, "tools", "ohpm", "bin");
+    const hvigorBin = path.join(toolHome, "tools", "hvigor", "bin");
+    fs.mkdirSync(ohpmBin, { recursive: true });
+    fs.mkdirSync(hvigorBin, { recursive: true });
+    fs.mkdirSync(sdk, { recursive: true });
+
+    const env = sanitizeBuildEnv(
+      {
+        PATH: "/usr/bin:/bin",
+        DEVECO_SDK_HOME: sdk,
+        ELECTRON_RUN_AS_NODE: "1",
+      },
+      {}
+    );
+
+    assert.equal(env.TOOL_HOME, toolHome);
+    assert.equal(env.OHPM_HOME, path.join(toolHome, "tools", "ohpm"));
+    assert.ok(env.PATH.split(path.delimiter).includes(ohpmBin));
+    assert.ok(env.PATH.split(path.delimiter).includes(hvigorBin));
+    assert.equal(env.ELECTRON_RUN_AS_NODE, undefined);
+  });
 });

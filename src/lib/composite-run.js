@@ -258,8 +258,10 @@ async function runBuildsParallel(buildTargets, opts) {
 function maybeLogHarmonyHint(result) {
   if (result?.target?.platform !== "harmony") return;
   onLog?.(
-    `\n[auto_pack] Harmony 构建失败常见原因：ohpm 缺本地 flutter.har（plugin_links/*/libs|har）或依赖损坏。` +
-      `构建前会自动补齐 flutter.har 并 ohpm install；若仍失败，在 App Root/ohos 执行 ohpm clean 后再打一次。\n`
+    `\n[auto_pack] Harmony 构建失败常见原因：` +
+      `① GUI 安装包未加载 ~/.zshrc，需注入 DevEco ohpm/hvigor（已自动补 PATH；仍失败请确认已装 DevEco）；` +
+      `② ohpm 缺本地 flutter.har（plugin_links/*/libs|har）或依赖损坏——构建前会自动补齐并 ohpm install；` +
+      `③ 多端并行后 ohos 状态脏了——可在 App Root/ohos 执行 ohpm clean 后再打一次。\n`
   );
 }
 
