@@ -61,6 +61,44 @@ describe("pack-root", () => {
     fs.rmSync(bundle, { recursive: true, force: true });
   });
 
+  it("refreshes Fastlane from bundle on every ensure (keeps .env)", () => {
+    const userPack = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pack-user-"));
+    const bundle = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pack-bundle-"));
+    fs.mkdirSync(path.join(bundle, "fastlane"));
+    fs.writeFileSync(path.join(bundle, "fastlane", "Fastfile"), "# v1\n");
+    fs.writeFileSync(path.join(bundle, ".env.example"), "APP_ROOT=\n");
+
+    ensurePackRootReady(userPack, { bundlePackRoot: bundle });
+    fs.writeFileSync(
+      path.join(userPack, ".env"),
+      "APP_ROOT=/keep/me\nPGYER_API_KEY=secret\n"
+    );
+    fs.writeFileSync(path.join(bundle, "fastlane", "Fastfile"), "# v2-new\n");
+    fs.writeFileSync(
+      path.join(bundle, "fastlane", "NewLane.rb"),
+      "# added\n"
+    );
+
+    ensurePackRootReady(userPack, { bundlePackRoot: bundle });
+
+    assert.match(
+      fs.readFileSync(path.join(userPack, "fastlane", "Fastfile"), "utf8"),
+      /v2-new/
+    );
+    assert.ok(fs.existsSync(path.join(userPack, "fastlane", "NewLane.rb")));
+    assert.match(
+      fs.readFileSync(path.join(userPack, ".env"), "utf8"),
+      /\/keep\/me/
+    );
+    assert.match(
+      fs.readFileSync(path.join(userPack, ".env"), "utf8"),
+      /secret/
+    );
+
+    fs.rmSync(userPack, { recursive: true, force: true });
+    fs.rmSync(bundle, { recursive: true, force: true });
+  });
+
   it("migrates legacy Resources .env into user pack once", () => {
     const userPack = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pack-user-"));
     const bundle = fs.mkdtempSync(path.join(os.tmpdir(), "auto-pack-bundle-"));

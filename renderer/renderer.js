@@ -9,6 +9,7 @@ let readiness = null;
 let suppressBranchChange = false;
 /** @type {"focus" | "all"} */
 let logMode = "focus";
+let logQuery = "";
 
 const { buildLogView } = window.AutoPackLogFilter;
 
@@ -37,6 +38,7 @@ const el = {
   runTabs: document.getElementById("run-tabs"),
   log: document.getElementById("log"),
   logMeta: document.getElementById("log-meta"),
+  logSearch: document.getElementById("log-search"),
   cancel: document.getElementById("cancel-run"),
 };
 
@@ -337,18 +339,33 @@ function renderLog() {
     return;
   }
 
-  const view = buildLogView(run.log, logMode);
+  const view = buildLogView(run.log, logMode, logQuery);
   el.log.innerHTML = view.html;
   if (el.logMeta) {
-    if (logMode === "focus" && view.hidden > 0) {
-      el.logMeta.textContent = `显示 ${view.shown} / ${view.total} 行 · 已隐藏 ${view.hidden} 条噪声`;
+    const q = logQuery.trim();
+    if (q) {
+      el.logMeta.textContent =
+        view.shown > 0
+          ? `搜索「${q}」· ${view.shown} 行命中`
+          : `搜索「${q}」· 无命中`;
+    } else if (logMode === "focus" && view.hidden > 0) {
+      el.logMeta.textContent = `精简 ${view.shown} / ${view.total} 行 · 已藏 ${view.hidden}（切「全部」看细节）`;
     } else if (view.total > 0) {
       el.logMeta.textContent = `${view.total} 行`;
     } else {
       el.logMeta.textContent = "";
     }
   }
-  el.log.scrollTop = el.log.scrollHeight;
+  if (logQuery.trim()) {
+    const hit = el.log.querySelector(".log-hit");
+    if (hit) {
+      hit.scrollIntoView({ block: "nearest" });
+    } else {
+      el.log.scrollTop = 0;
+    }
+  } else {
+    el.log.scrollTop = el.log.scrollHeight;
+  }
 }
 
 async function loadReadiness() {
@@ -400,6 +417,20 @@ for (const btn of document.querySelectorAll(".log-filter-btn")) {
     renderLog();
   });
 }
+
+el.logSearch?.addEventListener("input", () => {
+  logQuery = el.logSearch.value || "";
+  renderLog();
+});
+
+window.addEventListener("keydown", (ev) => {
+  if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "f") {
+    if (!el.logSearch) return;
+    ev.preventDefault();
+    el.logSearch.focus();
+    el.logSearch.select();
+  }
+});
 
 el.targetList.addEventListener("change", () => {
   syncModeEnabled();

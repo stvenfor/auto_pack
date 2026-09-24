@@ -41,7 +41,9 @@ function resolveBundlePackRoot(resourcesPath) {
 
 /**
  * Ensure pack root has Fastlane, artifacts/, and a starter .env.
- * When packaged, sync Fastlane/.env.example from the app bundle template.
+ * When packaged, always refresh Fastlane (+ .env.example) from the app
+ * bundle so DMG updates are not stuck on a first-run copy; never overwrite
+ * the user's `.env` or `artifacts/`.
  *
  * @param {string} packRoot
  * @param {{ bundlePackRoot?: string }} [opts]
@@ -54,12 +56,15 @@ function ensurePackRootReady(packRoot, opts = {}) {
   if (bundle && fs.existsSync(bundle)) {
     const bundleFastlane = path.join(bundle, "fastlane");
     const destFastlane = path.join(packRoot, "fastlane");
-    if (fs.existsSync(bundleFastlane) && !fs.existsSync(destFastlane)) {
+    if (fs.existsSync(bundleFastlane)) {
+      // Always re-sync: first install copied once and never updated, so
+      // packaged builds kept failing while `npm start` (repo Fastlane) worked.
+      fs.rmSync(destFastlane, { recursive: true, force: true });
       copyDirSync(bundleFastlane, destFastlane);
     }
     const bundleExample = path.join(bundle, ".env.example");
     const destExample = path.join(packRoot, ".env.example");
-    if (fs.existsSync(bundleExample) && !fs.existsSync(destExample)) {
+    if (fs.existsSync(bundleExample)) {
       fs.copyFileSync(bundleExample, destExample);
     }
     // One-time migrate: old builds wrote .env into Resources/pack
